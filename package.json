@@ -1,0 +1,30 @@
+{
+  "name": "study-library",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "concurrently -k \"npm run dev --workspace backend\" \"npm run dev --workspace frontend\"",
+    "dev:all": "npm run dev",
+    "dev:frontend": "npm run dev --workspace frontend",
+    "dev:backend": "npm run dev --workspace backend",
+    "dev:api": "npm run dev:backend",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:frontend": "npm run build --workspace frontend",
+    "build:backend": "npm run build --workspace backend",
+    "build:api": "npm run build:backend",
+    "preview": "npm run preview --workspace frontend",
+    "typecheck": "npm run typecheck --workspace backend && npm run typecheck --workspace frontend",
+    "db:generate": "npm run db:generate --workspace backend",
+    "db:push": "npm run db:push --workspace backend",
+    "db:seed": "npm run db:seed --workspace backend",
+    "db:setup": "npm run db:setup --workspace backend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

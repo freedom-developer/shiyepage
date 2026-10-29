@@ -1,0 +1,12 @@
+node_modules/
+**/dist/
+.DS_Store
+*.local
+.env
+**/storage/
+**/prisma/*.db
+**/prisma/*.db-journal
+
+# Keep the content directory visible while ignoring local PDF files by default.
+frontend/public/pdfs/**/*.pdf
+!frontend/public/pdfs/.gitkeep
