@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
-import { isPersonalSubject } from '../data/catalog'
 import { publicEntryRoute, publicSubjectRoute, usePublicProfile } from '../data/public-profile'
 
 const { account, profile } = usePublicProfile()
 const recentEntries = computed(() => profile.value?.entries.slice(0, 8) ?? [])
 const noteCount = computed(() => profile.value?.entries.filter((entry) => entry.kind === 'note').length ?? 0)
-const visibleSubjects = computed(() => profile.value?.subjects.filter(isPersonalSubject) ?? [])
+const visibleSubjects = computed(() => profile.value?.subjects ?? [])
 </script>
 
 <template>
@@ -18,7 +17,7 @@ const visibleSubjects = computed(() => profile.value?.subjects.filter(isPersonal
       <p class="form-help">{{ visibleSubjects.length }} 个学科 · {{ noteCount }} 篇笔记 · {{ profile.entries.length - noteCount }} 份电子书</p>
     </header>
 
-    <div v-if="!profile.entries.length" class="empty-state"><span class="empty-state-icon">✳</span><div><h3>还没有公开的学习资料</h3><p>这里将展示作者分享的笔记与电子书。</p></div></div>
+    <div v-if="!profile.entries.length && !visibleSubjects.length" class="empty-state"><span class="empty-state-icon">✳</span><div><h3>还没有公开的学习资料</h3><p>这里将展示作者分享的笔记与电子书。</p></div></div>
 
     <section v-if="visibleSubjects.length" class="section-block">
       <div class="section-heading"><h2>学习主题</h2></div>
@@ -26,7 +25,7 @@ const visibleSubjects = computed(() => profile.value?.subjects.filter(isPersonal
         <RouterLink v-for="subject in visibleSubjects" :key="subject.slug" :to="publicSubjectRoute(account, subject.slug)" class="subject-card" :class="`subject-${subject.color}`">
           <div class="subject-card-top"><span class="subject-icon">{{ subject.icon }}</span></div>
           <h3>{{ subject.title }}</h3><p>{{ subject.description }}</p>
-          <span class="subject-card-bottom"><span>{{ profile.entries.filter((entry) => entry.subjectSlug === subject.slug).length }} 项资料</span><span class="round-arrow">↗</span></span>
+          <span class="subject-card-bottom"><span>{{ subject.slug === 'linux-kernel' ? '源码与符号索引' : `${profile.entries.filter((entry) => entry.subjectSlug === subject.slug).length} 项资料` }}</span><span class="round-arrow">↗</span></span>
         </RouterLink>
       </div>
     </section>

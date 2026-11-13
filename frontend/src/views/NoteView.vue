@@ -91,7 +91,7 @@ watch(entry, (currentEntry) => { void loadNote(currentEntry) }, { immediate: tru
       <div class="reader-header-top"><span class="entry-type type-note">学习笔记</span><div v-if="canEdit" class="note-reading-actions"><RouterLink :to="{ name: 'subject', params: { subjectSlug: subject.slug, topicPath: entry.topicPath }, query: { edit: entry.id } }" class="text-button">在学科页编辑</RouterLink><button class="text-button" type="button" @click="isEditing = !isEditing">{{ isEditing ? '取消编辑' : '编辑正文' }}</button></div></div>
       <h1>{{ resource?.title ?? entry.title }}</h1>
       <p>{{ resource?.summary ?? entry.summary }}</p>
-      <div class="reader-meta"><span>更新于 {{ resource?.updatedAt?.slice(0, 10) ?? entry.updatedAt }}</span><span>Markdown · KaTeX · Shiki</span><span v-if="authState.user">{{ authState.user.email }}</span></div>
+      <div class="reader-meta"><span>更新于 {{ resource?.updatedAt?.slice(0, 10) ?? entry.updatedAt }}</span><span>Markdown · MathJax · Shiki</span><span v-if="authState.user">{{ authState.user.email }}</span></div>
     </header>
     <div v-if="isLoading" class="loading-state">正在加载笔记…</div>
     <div v-else-if="isEditing" class="editor-panel"><MarkdownEditor v-model="draft" :disabled="isSaving" /><div class="editor-actions"><span>直接编辑 Markdown，保存后自动排版公式与代码</span><button class="button-primary" type="button" :disabled="isSaving" @click="saveNote">{{ isSaving ? '保存中…' : '保存笔记' }} <span>↗</span></button></div></div>

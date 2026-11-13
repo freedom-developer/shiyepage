@@ -2,8 +2,9 @@
 import { onBeforeUnmount, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { KernelCodeTag } from '../lib/kernel-code'
+import { publicKernelSourceRoute } from '../data/public-profile'
 
-defineProps<{ name: string; tags: KernelCodeTag[] }>()
+const props = defineProps<{ name: string; tags: KernelCodeTag[]; publicAccount?: string }>()
 const emit = defineEmits<{ close: [] }>()
 
 function tagKindLabel(kind: string) {
@@ -15,6 +16,7 @@ function tagKindLabel(kind: string) {
 }
 
 function tagRoute(tag: KernelCodeTag) {
+  if (props.publicAccount) return publicKernelSourceRoute(props.publicAccount, tag)
   return { name: 'kernel-source', query: { file: tag.file, name: tag.name, address: tag.address, q: tag.name, scope: 'kernel' } }
 }
 

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { apiRequest } from '../lib/api'
 import { highlightKernelLines, type KernelCodeTag } from '../lib/kernel-code'
 import KernelTagPicker from './KernelTagPicker.vue'
+import { publicKernelRequest, publicKernelSourceRoute } from '../data/public-profile'
 
 const props = defineProps<{
   file: string
@@ -11,6 +12,7 @@ const props = defineProps<{
   lines: string[]
   symbols: Record<string, KernelCodeTag>
   highlightLine?: number
+  publicAccount?: string
 }>()
 const router = useRouter()
 
@@ -54,7 +56,12 @@ function scrollToCurrentLocation() {
 }
 
 function sourceRoute(tag: KernelCodeTag) {
+  if (props.publicAccount) return publicKernelSourceRoute(props.publicAccount, tag)
   return { name: 'kernel-source', query: { file: tag.file, name: tag.name, address: tag.address, q: tag.name, scope: 'kernel' } }
+}
+
+function kernelRequest<T>(path: string) {
+  return props.publicAccount ? publicKernelRequest<T>(props.publicAccount, path) : apiRequest<T>(path)
 }
 
 async function handleCodeClick(event: MouseEvent) {
@@ -65,7 +72,7 @@ async function handleCodeClick(event: MouseEvent) {
   event.preventDefault()
   tagLoading.value = true
   try {
-    const response = await apiRequest<{ results: KernelCodeTag[] }>(`/api/kernel/linux-6.8/tags?q=${encodeURIComponent(name)}&limit=1000`)
+    const response = await kernelRequest<{ results: KernelCodeTag[] }>(`/api/kernel/linux-6.8/tags?q=${encodeURIComponent(name)}&limit=1000`)
     const tags = response.results.filter((tag) => tag.name === name)
     if (tags.length <= 1) {
       const tag = tags[0]
@@ -130,6 +137,6 @@ watch(() => [props.file, props.startLine, props.lines, props.symbols, props.high
       </div>
       <div class="source-code-spacer" :style="{ height: bottomSpacerHeight }" aria-hidden="true"></div>
     </div>
-    <KernelTagPicker v-if="pickerTags.length" :name="pickerName" :tags="pickerTags" @close="closePicker" />
+    <KernelTagPicker v-if="pickerTags.length" :name="pickerName" :tags="pickerTags" :public-account="publicAccount" @close="closePicker" />
   </div>
 </template>

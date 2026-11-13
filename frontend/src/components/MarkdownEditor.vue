@@ -21,7 +21,7 @@ function insertTab(event: KeyboardEvent) {
   <div class="markdown-editor">
     <div class="markdown-editor-heading">
       <label :for="editorId">正文（Markdown）</label>
-      <a href="https://www.runoob.com/markdown/md-tutorial.html" target="_blank" rel="noopener noreferrer" class="text-button">Markdown语法详解 ↗</a>
+      <a href="/help/markdown" target="_blank" rel="noopener noreferrer" class="text-button">Markdown 与公式符号速查 ↗</a>
     </div>
     <textarea
       ref="editor"
@@ -36,6 +36,6 @@ function insertTab(event: KeyboardEvent) {
       autocomplete="off"
       placeholder="在这里输入 Markdown 正文…"
     ></textarea>
-    <p class="form-help markdown-editor-hint">行内公式用 <code>$x^2$</code>；独立公式用单独成行的 <code>$$</code> 包裹。帮助文档在新标签页打开，可与正文对照。</p>
+    <p class="form-help markdown-editor-hint">公式用 <code>$...$</code> 或 <code>$$...$$</code>；函数图用 <code>plot</code> 代码块。帮助文档有可复制示例。</p>
   </div>
 </template>

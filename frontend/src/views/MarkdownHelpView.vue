@@ -15,7 +15,7 @@ async function loadGuide() {
   loading.value = true
   error.value = ''
   try {
-    const html = await renderMarkdown(guide)
+    const html = await renderMarkdown(guide, undefined, { renderPlots: false })
     if (!active) return
     const container = document.createElement('div')
     container.innerHTML = html
@@ -40,9 +40,9 @@ onBeforeUnmount(() => { active = false })
 <template>
   <article class="markdown-guide">
     <header class="markdown-guide-heading">
-      <h1>Markdown 与数学公式用法</h1>
-      <p>复制示例到笔记正文，点击“预览”查看效果。文档中的公式使用与笔记相同的排版方式。</p>
-      <p class="form-help">用左侧目录快速跳转，也可以按 Ctrl+F（Mac：⌘F）查找“极限”“积分”“矩阵”等关键词。查完直接切回编辑标签页即可。</p>
+      <h1>Markdown 与公式符号速查</h1>
+      <p>按分类查找写法，复制公式源码到笔记正文，再点击“预览”查看效果。公式由 MathJax 排版，不会自动计算。</p>
+      <p class="form-help">用左侧目录快速跳转，也可以按 Ctrl+F（Mac：⌘F）查找符号名称、物理量或单位。不同教材的物理量记号可能不同，请以题目定义为准。</p>
     </header>
     <p v-if="loading" class="loading-state" role="status">正在加载用法文档…</p>
     <div v-else-if="error" role="alert"><p class="form-error">{{ error }}</p><button type="button" class="text-button" @click="loadGuide">重新加载</button></div>

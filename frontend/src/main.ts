@@ -4,7 +4,6 @@ import { router } from './router'
 import { authState, loadSession } from './lib/api'
 import { loadCatalog } from './data/catalog'
 import './styles/main.css'
-import 'katex/dist/katex.min.css'
 
 async function bootstrap() {
   await loadSession()

@@ -32,6 +32,19 @@ export async function publicRequest<T>(path: string): Promise<T> {
   return result as T
 }
 
+export async function publicKernelRequest<T>(account: string, path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers)
+  if (typeof init.body === 'string' && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
+  headers.set('x-public-profile', account)
+  const response = await fetch(path, { ...init, headers, credentials: 'omit', cache: 'no-store' })
+  const result = await response.json().catch(() => undefined) as { message?: string } | undefined
+  if (!response.ok) throw new Error(result?.message ?? 'Linux-6.8 源码加载失败')
+  if (!result) throw new Error('Linux-6.8 源码加载失败，请检查后端服务后重试')
+  return result as T
+}
+
 export function publicHomeRoute(account: string): RouteLocationRaw {
   return { name: 'public-home', params: { account } }
 }
@@ -44,4 +57,12 @@ export function publicEntryRoute(account: string, entry: LearningEntry): RouteLo
   if (entry.kind === 'pdf') return { name: 'public-pdf', params: { account, entryId: entry.id } }
   if (entry.kind === 'chm') return { name: 'public-chm', params: { account, entryId: entry.id } }
   return { name: 'public-subject', params: { account, subjectSlug: entry.subjectSlug, topicPath: entry.topicPath }, query: { note: entry.id } }
+}
+
+export function publicKernelSearchRoute(account: string): RouteLocationRaw {
+  return { name: 'public-kernel-search', params: { account }, query: { scope: 'kernel' } }
+}
+
+export function publicKernelSourceRoute(account: string, tag: { file: string; name: string; address: string }): RouteLocationRaw {
+  return { name: 'public-kernel-source', params: { account }, query: { ...tag, q: tag.name, scope: 'kernel' } }
 }

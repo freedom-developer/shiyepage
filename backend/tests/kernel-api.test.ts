@@ -6,7 +6,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 
-test('Linux Kernel API exposes guarded tag search, directories, files, and definition navigation', async (t) => {
+test('Linux Kernel API exposes anonymous tag search, source browsing, and definition navigation', async (t) => {
   const testDir = await mkdtemp(path.join(os.tmpdir(), 'study-kernel-api-test-'))
   const sourceRoot = path.join(testDir, 'linux-6.8')
   await mkdir(path.join(sourceRoot, 'arch', 'x86'), { recursive: true })
@@ -48,14 +48,69 @@ test('Linux Kernel API exposes guarded tag search, directories, files, and defin
     await rm(testDir, { recursive: true, force: true })
   })
 
-  for (const url of [
-    '/api/kernel/linux-6.8/tags?q=schedule',
-    '/api/kernel/linux-6.8/directory',
-    '/api/kernel/linux-6.8/file?path=arch%2Fx86%2Fentry.c',
-  ]) {
-    assert.equal((await app.inject({ method: 'GET', url })).statusCode, 401)
-  }
-  assert.equal((await app.inject({ method: 'POST', url: '/api/kernel/linux-6.8/tags/lookup', payload: { references: [{ name: 'schedule', kind: 'function' }] } })).statusCode, 401)
+  const anonymousSearch = await app.inject({ method: 'GET', url: '/api/kernel/linux-6.8/tags?q=schedule' })
+  assert.equal(anonymousSearch.statusCode, 200)
+  assert.equal(anonymousSearch.json().results[0].name, 'schedule')
+  const anonymousLookup = await app.inject({
+    method: 'POST',
+    url: '/api/kernel/linux-6.8/tags/lookup',
+    payload: { references: [
+      { name: 'schedule', kind: 'function' },
+      { name: 'open_how', kind: 'struct' },
+      { name: 'path_init', kind: 'function' },
+      { name: 'set_nameidata', kind: 'function' },
+    ] },
+  })
+  assert.equal(anonymousLookup.statusCode, 200)
+  assert.equal(anonymousLookup.json().symbols.schedule.file, 'arch/x86/entry.c')
+  assert.equal(anonymousLookup.json().symbols.open_how.file, 'include/uapi/linux/openat2.h')
+  assert.equal(anonymousLookup.json().symbols.path_init.file, 'fs/namei.c')
+  const anonymousDirectory = await app.inject({ method: 'GET', url: '/api/kernel/linux-6.8/directory?path=arch%2Fx86' })
+  assert.equal(anonymousDirectory.statusCode, 200)
+  assert.equal(anonymousDirectory.json().entries[0].name, 'entry.c')
+  const anonymousFile = await app.inject({ method: 'GET', url: '/api/kernel/linux-6.8/file?path=arch%2Fx86%2Fentry.c' })
+  assert.equal(anonymousFile.statusCode, 200)
+  assert.equal(anonymousFile.json().symbols.schedule.file, 'arch/x86/entry.c')
+  const anonymousTag = anonymousSearch.json().results[0]
+  const anonymousSourceQuery = new URLSearchParams({ file: anonymousTag.file, name: anonymousTag.name, address: anonymousTag.address })
+  const anonymousSource = await app.inject({ method: 'GET', url: `/api/kernel/linux-6.8/source?${anonymousSourceQuery}` })
+  assert.equal(anonymousSource.statusCode, 200)
+  assert.equal(anonymousSource.json().lines[300], 'int schedule(void) {')
+
+  const publicRegistration = await app.inject({
+    method: 'POST',
+    url: '/api/auth/register',
+    payload: { email: 'freedom_developer@163.com', password: 'test-password-789' },
+  })
+  assert.equal(publicRegistration.statusCode, 201)
+  const publicKernelMenuNode = await prisma.catalogNode.findFirst({ where: { subjectId: computer.id, slug: 'linux-kernel' } })
+  assert.ok(publicKernelMenuNode)
+  await prisma.resource.create({
+    data: {
+      kind: 'NOTE', title: '公开内核笔记', subjectId: computer.id, nodeId: publicKernelMenuNode.id,
+      ownerId: publicRegistration.json().user.id, content: '公开内容', searchText: '公开内容', isPrivate: false,
+    },
+  })
+  const publicProfile = await app.inject({ method: 'GET', url: '/api/public/freedom_developer%40163.com' })
+  assert.equal(publicProfile.statusCode, 200)
+  const publicComputer = publicProfile.json().subjects.find((subject: { slug: string }) => subject.slug === 'computer')
+  const publicKernelMenu = publicComputer.nodes.find((node: { slug: string }) => node.slug === 'linux-kernel')
+  assert.equal(publicKernelMenu.children.find((node: { slug: string }) => node.slug === 'linux-6-8').children[0].title, 'arch')
+  const publicHeaders = { 'x-public-profile': 'freedom_developer@163.com' }
+  const publicDirectory = await app.inject({ method: 'GET', url: '/api/kernel/linux-6.8/directory?path=arch%2Fx86', headers: publicHeaders })
+  assert.equal(publicDirectory.statusCode, 200)
+  assert.equal(publicDirectory.json().entries[0].name, 'entry.c')
+  const publicSearch = await app.inject({ method: 'GET', url: '/api/kernel/linux-6.8/tags?q=schedule', headers: publicHeaders })
+  assert.equal(publicSearch.statusCode, 200)
+  assert.equal(publicSearch.json().results[0].name, 'schedule')
+  const publicTag = publicSearch.json().results[0]
+  const publicSourceQuery = new URLSearchParams({ file: publicTag.file, name: publicTag.name, address: publicTag.address })
+  const publicSource = await app.inject({ method: 'GET', url: `/api/kernel/linux-6.8/source?${publicSourceQuery}`, headers: publicHeaders })
+  assert.equal(publicSource.statusCode, 200)
+  assert.equal(publicSource.json().lines[300], 'int schedule(void) {')
+  const publicLookup = await app.inject({ method: 'POST', url: '/api/kernel/linux-6.8/tags/lookup', headers: publicHeaders, payload: { references: [{ name: 'schedule', kind: 'function' }] } })
+  assert.equal(publicLookup.statusCode, 200)
+  assert.equal(publicLookup.json().symbols.schedule.file, 'arch/x86/entry.c')
 
   const registration = await app.inject({
     method: 'POST',

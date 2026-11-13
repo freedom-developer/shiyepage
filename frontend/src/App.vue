@@ -7,6 +7,7 @@ import {
   getEntry,
   getEntryTopicPath,
   getSubject,
+  entries,
   subjects,
   catalogError,
   clearCatalog,
@@ -69,9 +70,6 @@ function handleLogout() {
         <nav class="top-navigation" aria-label="主导航">
           <RouterLink to="/" class="top-link" exact-active-class="is-active">首页</RouterLink>
           <template v-if="authState.user">
-            <RouterLink to="/search" class="top-link search-nav-link" active-class="is-active" aria-label="搜索笔记、资料和 Linux 符号">
-              <span aria-hidden="true">⌕</span>搜索
-            </RouterLink>
             <RouterLink
               v-for="subject in navSubjects"
               :key="subject.slug"
@@ -81,7 +79,6 @@ function handleLogout() {
             >
               {{ subject.shortTitle }}
             </RouterLink>
-            <RouterLink to="/admin" class="top-link nav-manage-link">学科管理</RouterLink>
           </template>
         </nav>
 
@@ -89,6 +86,9 @@ function handleLogout() {
           <span class="status-dot"></span>
           <RouterLink v-if="!authState.user" to="/login" class="auth-link">登录</RouterLink>
           <template v-else>
+            <RouterLink to="/search" class="auth-link search-nav-link" active-class="is-active" aria-label="搜索笔记、资料和 Linux 符号">
+              <span aria-hidden="true">⌕</span>搜索
+            </RouterLink>
             <RouterLink :to="{ name: 'public-home', params: { account: authState.user.email } }" class="auth-link">个人主页</RouterLink>
             <RouterLink to="/admin" class="auth-link">学科管理</RouterLink>
             <button class="logout-button" type="button" @click="handleLogout">退出</button>
@@ -101,6 +101,7 @@ function handleLogout() {
       <SideNavigation
         v-if="hasSidebar && currentSubject"
         :subject="currentSubject"
+        :entries="entries"
         :active-path="activePath"
         :read-only="currentSubject.slug === 'linux-kernel'"
       />

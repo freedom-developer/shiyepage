@@ -7,7 +7,7 @@ import { publicApiBase, publicHomeRoute, publicProfileKey, publicRequest, public
 const route = useRoute()
 const account = computed(() => String(route.params.account ?? '').toLowerCase())
 const profile = shallowRef<PublicProfile>()
-const visibleSubjects = computed(() => profile.value?.subjects.filter((subject) => subject.slug !== 'linux-kernel') ?? [])
+const visibleSubjects = computed(() => profile.value?.subjects ?? [])
 const loading = ref(false)
 const error = ref('')
 let loadVersion = 0
@@ -61,7 +61,7 @@ onBeforeUnmount(() => { loadVersion++ })
     </header>
 
     <div class="page-layout" :class="{ 'has-sidebar': Boolean(currentSubject) }">
-      <SideNavigation v-if="currentSubject" :subject="currentSubject" :active-path="activePath" :account="account" read-only />
+      <SideNavigation v-if="currentSubject" :subject="currentSubject" :entries="profile?.entries" :active-path="activePath" :account="account" read-only />
       <main class="main-content">
         <p v-if="loading" class="loading-state" role="status">正在加载个人主页…</p>
         <div v-else-if="error" class="not-found-inline" role="alert"><h1>暂时无法查看这个主页</h1><p>{{ error }}</p><button type="button" class="text-button" @click="loadProfile">重新加载</button></div>

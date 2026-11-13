@@ -96,16 +96,18 @@ function catalogResponse(subjects: Subject[], nodes: CatalogNode[], resources: R
   }
 }
 
-export async function getPublicCatalog(prisma: PrismaClient, ownerId: string) {
+export async function getPublicCatalog(prisma: PrismaClient, ownerId: string, includeKernel = false) {
   const resources = await prisma.resource.findMany({
     where: { ownerId, isPrivate: false },
     orderBy: { updatedAt: 'desc' },
   })
   const subjectIds = [...new Set(resources.map((resource) => resource.subjectId))]
-  const [subjects, nodes] = await Promise.all([
+  const [publicSubjects, publicNodes] = await Promise.all([
     prisma.subject.findMany({ where: { id: { in: subjectIds } }, orderBy: { sortOrder: 'asc' } }),
     prisma.catalogNode.findMany({ where: { subjectId: { in: subjectIds } } }),
   ])
+  const subjects = publicSubjects
+  const nodes = publicNodes
   const byId = new Map(nodes.map((node) => [node.id, node]))
   const visibleNodes = new Set<string>()
   for (const resource of resources) {
@@ -114,6 +116,25 @@ export async function getPublicCatalog(prisma: PrismaClient, ownerId: string) {
       visibleNodes.add(node.id)
       node = node.parentId ? byId.get(node.parentId) : undefined
     }
+  }
+  if (includeKernel) {
+    const kernelMenuIds = new Set(publicNodes
+      .filter((node) => node.slug === 'linux-kernel' || node.title.toLowerCase() === 'linux kernel')
+      .map((node) => node.id))
+    const nestedVersionIds = new Set(publicNodes
+      .filter((node) => node.slug === 'linux-6-8' && node.parentId && kernelMenuIds.has(node.parentId))
+      .map((node) => node.id))
+    for (const node of publicNodes) {
+      let parentId = node.parentId
+      while (parentId) {
+        if (nestedVersionIds.has(parentId)) {
+          visibleNodes.add(node.id)
+          break
+        }
+        parentId = byId.get(parentId)?.parentId ?? null
+      }
+    }
+    for (const id of nestedVersionIds) visibleNodes.add(id)
   }
   // Only expose menus containing this account's public resources, and their ancestors.
   return catalogResponse(subjects, nodes.filter((node) => visibleNodes.has(node.id)), resources)

@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { apiRequest } from '../lib/api'
 import KernelTagPicker from '../components/KernelTagPicker.vue'
 import type { KernelCodeTag } from '../lib/kernel-code'
+import { publicKernelRequest, publicKernelSourceRoute } from '../data/public-profile'
 
 type SearchScope = 'all' | 'resources' | 'kernel'
 interface ResourceResult { id: string; kind: 'note' | 'pdf' | 'chm'; title: string; summary: string; subjectSlug: string; updatedAt: string }
@@ -12,6 +13,8 @@ interface KernelSearchResponse { results: KernelTag[]; matchMode: 'exact' | 'pre
 
 const route = useRoute()
 const router = useRouter()
+const publicAccount = computed(() => typeof route.params.account === 'string' ? route.params.account : '')
+const publicKernelSearch = computed(() => Boolean(publicAccount.value))
 const query = ref(typeof route.query.q === 'string' ? route.query.q : '')
 const scope = ref<SearchScope>(route.query.scope === 'resources' || route.query.scope === 'kernel' ? route.query.scope : 'all')
 const resourceResults = ref<ResourceResult[]>([])
@@ -50,10 +53,15 @@ function tagKindLabel(kind: string) {
 }
 
 function kernelRoute(tag: KernelTag) {
+  if (publicAccount.value) return publicKernelSourceRoute(publicAccount.value, tag)
   return {
     name: 'kernel-source',
     query: { file: tag.file, name: tag.name, address: tag.address, q: searchedQuery.value, scope: scope.value },
   }
+}
+
+function kernelRequest<T>(path: string) {
+  return publicAccount.value ? publicKernelRequest<T>(publicAccount.value, path) : apiRequest<T>(path)
 }
 
 async function openKernelTag(group: { name: string; tags: KernelTag[] }) {
@@ -63,7 +71,7 @@ async function openKernelTag(group: { name: string; tags: KernelTag[] }) {
   }
   pickerLoading.value = true
   try {
-    const response = await apiRequest<KernelSearchResponse>(`/api/kernel/linux-6.8/tags?q=${encodeURIComponent(group.name)}&limit=1000`)
+    const response = await kernelRequest<KernelSearchResponse>(`/api/kernel/linux-6.8/tags?q=${encodeURIComponent(group.name)}&limit=1000`)
     const tags = response.results.filter((tag) => tag.name === group.name)
     pickerName.value = group.name
     pickerTags.value = tags.length > 1 ? tags : group.tags
@@ -84,7 +92,7 @@ async function loadKernelPage(value: string, offset: number, version = searchVer
   kernelLoading.value = true
   kernelError.value = ''
   try {
-    const response = await apiRequest<KernelSearchResponse>(`/api/kernel/linux-6.8/tags?q=${encodeURIComponent(value)}&offset=${offset}`)
+    const response = await kernelRequest<KernelSearchResponse>(`/api/kernel/linux-6.8/tags?q=${encodeURIComponent(value)}&offset=${offset}`)
     if (version !== searchVersion) return
     if (append) kernelResults.value.push(...response.results)
     else kernelResults.value = response.results
@@ -116,7 +124,7 @@ async function runSearch(value: string, selectedScope: SearchScope) {
   if (!value) return
 
   const tasks: Promise<void>[] = []
-  if (selectedScope === 'all' || selectedScope === 'resources') {
+  if (!publicKernelSearch.value && (selectedScope === 'all' || selectedScope === 'resources')) {
     resourceLoading.value = true
     tasks.push((async () => {
       try {
@@ -129,7 +137,7 @@ async function runSearch(value: string, selectedScope: SearchScope) {
       }
     })())
   }
-  if (selectedScope === 'all' || selectedScope === 'kernel') {
+  if (publicKernelSearch.value || selectedScope === 'all' || selectedScope === 'kernel') {
     tasks.push(loadKernelPage(value, 0, version))
   }
   await Promise.all(tasks)
@@ -159,14 +167,14 @@ watch(() => [route.query.q, route.query.scope] as const, ([routeQuery, routeScop
 
 <template>
   <section class="search-view">
-    <div class="search-heading"><div><span class="eyebrow">SEARCH YOUR ARCHIVE</span><h1>搜索</h1><p>笔记、PDF 与 Linux-6.8 符号索引分别检索并分组显示。</p></div></div>
-    <div class="search-scopes" role="tablist" aria-label="搜索范围">
+    <div class="search-heading"><div><span class="eyebrow">{{ publicKernelSearch ? 'LINUX KERNEL' : 'SEARCH YOUR ARCHIVE' }}</span><h1>{{ publicKernelSearch ? 'Linux-6.8 符号搜索' : '搜索' }}</h1><p>{{ publicKernelSearch ? '搜索 Linux-6.8 tags 并定位源码定义。' : '笔记、PDF 与 Linux-6.8 符号索引分别检索并分组显示。' }}</p></div></div>
+    <div v-if="!publicKernelSearch" class="search-scopes" role="tablist" aria-label="搜索范围">
       <button type="button" role="tab" :aria-selected="scope === 'all'" :class="{ 'is-active': scope === 'all' }" @click="selectScope('all')">全部</button>
       <button type="button" role="tab" :aria-selected="scope === 'resources'" :class="{ 'is-active': scope === 'resources' }" @click="selectScope('resources')">笔记与文件</button>
       <button type="button" role="tab" :aria-selected="scope === 'kernel'" :class="{ 'is-active': scope === 'kernel' }" @click="selectScope('kernel')">Linux 符号</button>
     </div>
     <form class="search-form" @submit.prevent="search">
-      <input v-model="query" type="search" :placeholder="scope === 'kernel' ? '输入符号名，例如 schedule 或 task_struct' : scope === 'resources' ? '搜索笔记、PDF 或 CHM 标题' : '搜索笔记、资料文件或 Linux 符号'" autofocus />
+      <input v-model="query" type="search" :placeholder="publicKernelSearch || scope === 'kernel' ? '输入符号名，例如 schedule 或 task_struct' : scope === 'resources' ? '搜索笔记、PDF 或 CHM 标题' : '搜索笔记、资料文件或 Linux 符号'" autofocus />
       <button class="button-primary" type="submit">搜索 <span>↗</span></button>
     </form>
     <p v-if="loading" class="loading-state" role="status">正在搜索…</p>
@@ -181,7 +189,7 @@ watch(() => [route.query.q, route.query.scope] as const, ([routeQuery, routeScop
     </div>
 
     <div v-if="searchedQuery" class="search-groups">
-      <section v-if="scope !== 'kernel' && (resourceResults.length || resourceError)" class="search-group">
+      <section v-if="!publicKernelSearch && scope !== 'kernel' && (resourceResults.length || resourceError)" class="search-group">
         <header class="search-group-heading"><h2>笔记与文件</h2><span>{{ resourceResults.length }} 条</span></header>
         <div v-if="resourceResults.length" class="search-results">
           <RouterLink v-for="result in resourceResults" :key="result.id" :to="resourceRoute(result)" :target="result.kind === 'note' ? undefined : '_blank'" :rel="result.kind === 'note' ? undefined : 'noopener noreferrer'" class="search-result-row">
@@ -206,6 +214,6 @@ watch(() => [route.query.q, route.query.scope] as const, ([routeQuery, routeScop
         <p v-else-if="searchedQuery && !kernelLoading && kernelMatchMode === 'none'" class="search-inline-empty">没有匹配的 Linux 符号。</p>
       </section>
     </div>
-    <KernelTagPicker v-if="pickerTags.length" :name="pickerName" :tags="pickerTags" @close="closePicker" />
+    <KernelTagPicker v-if="pickerTags.length" :name="pickerName" :tags="pickerTags" :public-account="publicAccount || undefined" @close="closePicker" />
   </section>
 </template>

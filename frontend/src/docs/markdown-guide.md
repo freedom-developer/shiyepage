@@ -92,9 +92,132 @@ print(square(3))
 
 目前支持高亮的语言标识有 `python`、`javascript`、`typescript`、`bash`、`sql`、`json`、`html`、`css`。其他语言仍可用代码块展示。
 
+## Markdown 绘图
+
+用语言标识为 `plot` 的代码块绘制图形。默认绘制二维函数图；设置 `dimension: 3` 后绘制三维曲面。每一行使用 `名称: 值`，空行和以 `#` 开头的行会被忽略。
+
+### 语法速查
+
+| 设置项 | 适用范围 | 写法与说明 |
+| --- | --- | --- |
+| `dimension` | 二维/三维 | `2` 或 `3`，默认是 `2`。三维图必须在 `z` 前设置为 `3`。 |
+| `fn` | 二维 | 函数表达式，可重复多次叠加曲线，最多 8 条。例如 `fn: sin(x)`。 |
+| `z` | 三维 | 曲面表达式，使用变量 `x`、`y`，例如 `z: sin(sqrt(x^2+y^2))`。 |
+| `x` | 二维/三维 | x 轴范围，格式为 `最小值, 最大值`，例如 `x: -5, 5`。 |
+| `y` | 二维/三维 | y 轴范围，格式为 `最小值, 最大值`。 |
+| `zrange` | 三维 | z 轴范围，格式为 `最小值, 最大值`。 |
+| `point` | 二维 | 标记点，格式为 `x, y, filled` 或 `x, y, open`；省略样式时为实心点。 |
+| `title` | 二维 | 图标题，例如 `title: 正弦曲线`。 |
+| `xlabel` | 二维 | x 轴名称，例如 `xlabel: 时间 t`。 |
+| `ylabel` | 二维 | y 轴名称，例如 `ylabel: 位移 s`。 |
+
+坐标范围必须是两个递增的有限数字，绝对值不能超过 `1000000`。每个图最多标记 20 个点。函数表达式只允许字母、数字、空格和常见运算符，不会执行 JavaScript。
+
+### 表达式写法
+
+可以使用 `+`、`-`、`*`、`/`、`^`、括号和 `%`，以及常用函数 `sin`、`cos`、`tan`、`sqrt`、`abs`、`exp`、`log`。例如：
+
+| 数学写法 | 绘图表达式 |
+| --- | --- |
+| $y=x^2$ | `fn: x^2` |
+| $y=\sin x$ | `fn: sin(x)` |
+| $y=e^{-x^2}$ | `fn: exp(-x^2)` |
+| $z=\sqrt{x^2+y^2}$ | `z: sqrt(x^2+y^2)` |
+
+函数名和变量名使用英文半角字符；不要写 `$...$`、反斜杠 LaTeX 命令或 JavaScript 代码。表达式错误时，源码块会保留，并在下方显示错误提示。
+
+下面的例子绘制 $\frac{\sin x}{x}$、水平线 $y=1$，并在 $(0,1)$ 标出空心点：
+
+````markdown
+```plot
+fn: sin(x)/x
+fn: 1
+x: -1, 1
+y: 0.8, 1.1
+title: sin(x)/x 在 x=0 附近
+xlabel: x
+ylabel: y
+point: 0, 1, open
+```
+````
+
+实际图形：
+
+```plot
+fn: sin(x)/x
+fn: 1
+x: -1, 1
+y: 0.8, 1.1
+title: sin(x)/x 在 x=0 附近
+xlabel: x
+ylabel: y
+point: 0, 1, open
+```
+
+函数绘图支持数学表达式，不执行 JavaScript；语法错误时会保留源码并显示错误提示。
+
+二维图的完整字段模板：
+
+````markdown
+```plot
+# 每个字段单独一行；fn 可以重复
+fn: sin(x)
+fn: cos(x)
+x: -6.28, 6.28
+y: -1.2, 1.2
+title: 三角函数
+xlabel: x
+ylabel: y
+point: 0, 0, filled
+point: 1.57, 1, open
+```
+````
+
+三维示例绘制 $z=\sin(\sqrt{x^2+y^2})$：
+
+````markdown
+```plot
+dimension: 3
+z: sin(sqrt(x^2+y^2))
+x: -5, 5
+y: -5, 5
+zrange: -1.2, 1.2
+```
+````
+
+实际曲面：
+
+```plot
+dimension: 3
+z: sin(sqrt(x^2+y^2))
+x: -5, 5
+y: -5, 5
+zrange: -1.2, 1.2
+```
+
+三维图的最小模板如下。`z` 表达式必须使用 `x`、`y` 两个变量；`zrange` 只控制显示范围，不会截断函数计算。当前笔记会将三维曲面保存为静态 SVG，适合查看和打印。
+
+````markdown
+```plot
+dimension: 3
+z: x^2 - y^2
+x: -2, 2
+y: -2, 2
+zrange: -4, 4
+```
+````
+
+### 常见问题
+
+- 二维图至少需要一行 `fn`；三维图至少需要一行 `z`。
+- `z` 写在 `dimension: 3` 之前会被按二维语法检查并报错，请调整顺序。
+- `fn` 不能用于三维图，三维曲面请改用 `z`。
+- 范围、点坐标使用英文逗号 `,`；字段名称不区分大小写，但表达式函数建议使用小写。
+- 一个文档可以包含多个 `plot` 代码块，每个代码块独立绘制。
+
 ## 数学公式如何排版
 
-公式使用 LaTeX 数学语法。网站在预览、保存后的阅读页和公开主页中自动用 KaTeX 排版，不需要额外安装 LaTeX，也不用运行编译命令。它负责展示公式，不会自动算出答案。
+公式使用 LaTeX 数学语法。网站在预览、保存后的阅读页和公开主页中使用 MathJax 3 排版，不需要额外安装 LaTeX，也不用运行编译命令。它负责展示公式，不会自动算出答案。
 
 行内公式：用一对 `$` 包住公式，适合放在句子里，`$` 与内部公式之间不要留空格。
 
@@ -277,6 +400,149 @@ $$
 
 公式内部想写普通文字，可以用 `\text{文字}`，例如 `$x>0\quad\text{当 x 为正数时}$`。
 
+## 数学符号分类速查
+
+下面列出常见数学符号的 LaTeX 写法。将“输入”列放进 `$...$` 或 `$$...$$` 中即可；符号在不同学科中可能有不同含义。
+
+### 希腊字母
+
+小写希腊字母通常用反斜杠加名称；大写形式也可直接按名称输入。少数大写字母与英文字母外形相同，因此没有独立命令。
+
+| 类别 | 输入 | 效果 |
+| --- | --- | --- |
+| 小写（前半） | `\alpha, \beta, \gamma, \delta, \epsilon, \varepsilon, \zeta, \eta, \theta, \vartheta, \iota, \kappa` | $\alpha, \beta, \gamma, \delta, \epsilon, \varepsilon, \zeta, \eta, \theta, \vartheta, \iota, \kappa$ |
+| 小写（后半） | `\lambda, \mu, \nu, \xi, o, \pi, \varpi, \rho, \varrho, \sigma, \varsigma, \tau` | $\lambda, \mu, \nu, \xi, o, \pi, \varpi, \rho, \varrho, \sigma, \varsigma, \tau$ |
+| 小写（续） | `\upsilon, \phi, \varphi, \chi, \psi, \omega` | $\upsilon, \phi, \varphi, \chi, \psi, \omega$ |
+| 大写（有专用命令） | `\Gamma, \Delta, \Theta, \Lambda, \Xi, \Pi, \Sigma, \Upsilon, \Phi, \Psi, \Omega` | $\Gamma, \Delta, \Theta, \Lambda, \Xi, \Pi, \Sigma, \Upsilon, \Phi, \Psi, \Omega$ |
+
+### 运算、比较与逻辑
+
+| 类别 | 输入 | 效果 |
+| --- | --- | --- |
+| 加减乘除 | `a+b, a-b, a\times b, a\div b` | $a+b, a-b, a\times b, a\div b$ |
+| 点乘、叉乘、星号 | `\vec a\cdot\vec b, \vec a\times\vec b, a\ast b` | $\vec a\cdot\vec b, \vec a\times\vec b, a\ast b$ |
+| 不等与近似 | `\ne, \approx, \sim, \equiv` | $\ne, \approx, \sim, \equiv$ |
+| 大小关系 | `\lt, \le, \gt, \ge` | $\lt, \le, \gt, \ge$ |
+| 比例与正比 | `a:b, a\propto b` | $a:b, a\propto b$ |
+| 且、或、非 | `\land, \lor, \lnot` | $\land, \lor, \lnot$ |
+| 因此、因为 | `\therefore, \because` | $\therefore, \because$ |
+| 全称、存在 | `\forall x, \exists x` | $\forall x, \exists x$ |
+| 取模 | `a\bmod n` | $a\bmod n$ |
+
+### 集合、箭头与省略号
+
+| 类别 | 输入 | 效果 |
+| --- | --- | --- |
+| 属于、不属于 | `x\in A, x\notin A` | $x\in A, x\notin A$ |
+| 子集、真子集 | `A\subseteq B, A\subset B` | $A\subseteq B, A\subset B$ |
+| 并、交、差集 | `A\cup B, A\cap B, A\setminus B` | $A\cup B, A\cap B, A\setminus B$ |
+| 空集、全集 | `\varnothing, U` | $\varnothing, U$ |
+| 映射、趋近 | `A\to B, x\rightarrow 0` | $A\to B, x\rightarrow 0$ |
+| 推出、等价 | `A\Rightarrow B, A\Leftrightarrow B` | $A\Rightarrow B, A\Leftrightarrow B$ |
+| 单点、居中、省略 | `a_1,\ldots,a_n; \cdots; \vdots; \ddots` | $a_1,\ldots,a_n; \cdots; \vdots; \ddots$ |
+
+### 字体、装饰与间距
+
+| 效果 | 输入 | 示例 |
+| --- | --- | --- |
+| 粗体向量/变量 | `\mathbf{v}` | $\mathbf{v}$ |
+| 花体集合 | `\mathcal{F}` | $\mathcal{F}$ |
+| 黑板粗体数集 | `\mathbb{R}` | $\mathbb{R}$ |
+| 向量箭头 | `\vec{AB}` | $\vec{AB}$ |
+| 上划线、平均值 | `\overline{AB}, \bar{x}` | $\overline{AB}, \bar{x}$ |
+| 波浪/帽子 | `\tilde{x}, \hat{x}` | $\tilde{x}, \hat{x}$ |
+| 角度、度数 | `\angle ABC, 90^\circ` | $\angle ABC, 90^\circ$ |
+| 直立单位或文字 | `\mathrm{m}, \text{其中}` | $\mathrm{m}, \text{其中}$ |
+| 小/中/大间距 | `a\,b, a\;b, a\quad b` | $a\,b, a\;b, a\quad b$ |
+
+## 物理公式、量纲与单位
+
+物理公式通常由“物理量符号 + 数学运算 + 单位”组成。物理量使用斜体（如 `v`），单位使用直立体（如 `\mathrm{m/s}`）；向量可用 `\vec{v}`，变化量常用 `\Delta`。字母不是全领域唯一固定的，第一次出现时建议在文字中说明含义。
+
+### 力学与运动
+
+| 物理量 | 常见符号 | 单位写法 |
+| --- | --- | --- |
+| 位置、位移 | `x, \vec r, \Delta x` | `\mathrm{m}` |
+| 时间、时间间隔 | `t, \Delta t` | `\mathrm{s}` |
+| 速度、加速度 | `v, \vec v; a, \vec a` | `\mathrm{m/s}; \mathrm{m/s^2}` |
+| 质量、密度 | `m, \rho` | `\mathrm{kg}; \mathrm{kg/m^3}` |
+| 力、重力加速度 | `F, \vec F; g` | `\mathrm{N}; \mathrm{m/s^2}` |
+| 动量、冲量 | `p, \vec p; J` | `\mathrm{kg\,m/s}; \mathrm{N\,s}` |
+| 功、能量、功率 | `W, E; P` | `\mathrm{J}; \mathrm{W}` |
+| 压强、弹簧劲度系数 | `p; k` | `\mathrm{Pa}; \mathrm{N/m}` |
+| 角度、角速度、角加速度 | `\theta; \omega; \alpha` | `\mathrm{rad}; \mathrm{rad/s}; \mathrm{rad/s^2}` |
+
+示例（匀加速运动和牛顿第二定律）：
+
+```markdown
+$$
+x=x_0+v_0t+\frac{1}{2}at^2, \qquad \vec F=m\vec a
+$$
+```
+
+$$
+x=x_0+v_0t+\frac{1}{2}at^2, \qquad \vec F=m\vec a
+$$
+
+### 电磁学与电路
+
+| 物理量 | 常见符号 | 单位写法 |
+| --- | --- | --- |
+| 电荷量、电流 | `q, Q; I` | `\mathrm{C}; \mathrm{A}` |
+| 电压、电势、电动势 | `U; V; \mathcal{E}` | `\mathrm{V}` |
+| 电阻、电导 | `R; G` | `\mathrm{\Omega}; \mathrm{S}` |
+| 电场、磁场 | `\vec E; \vec B` | `\mathrm{V/m}; \mathrm{T}` |
+| 磁通量、电容 | `\Phi_B; C` | `\mathrm{Wb}; \mathrm{F}` |
+| 电感、电阻率 | `L; \rho` | `\mathrm{H}; \mathrm{\Omega\,m}` |
+
+### 热学、波动与光学
+
+| 物理量 | 常见符号 | 单位写法 |
+| --- | --- | --- |
+| 温度、温差 | `T; \Delta T` | `\mathrm{K}` |
+| 热量、比热容 | `Q; c` | `\mathrm{J}; \mathrm{J/(kg\,K)}` |
+| 物质的量、压强 | `n; p` | `\mathrm{mol}; \mathrm{Pa}` |
+| 波长、频率、周期 | `\lambda; f; T` | `\mathrm{m}; \mathrm{Hz}; \mathrm{s}` |
+| 波速、振幅 | `v; A` | `\mathrm{m/s};` 与原量相同 |
+| 折射率、焦距 | `n; f` | 无量纲；`\mathrm{m}` |
+
+### 常见 SI 基本单位与导出单位
+
+单位符号大小写有严格区别：`m` 是米，`M` 是兆前缀；`s` 是秒，`S` 是西门子。单位用直立体，乘法可用 `\,` 留出间距，除法可用负指数。
+
+| 量 | 单位名称与符号 | 公式输入示例 |
+| --- | --- | --- |
+| 长度、质量、时间 | 米 `\mathrm{m}`；千克 `\mathrm{kg}`；秒 `\mathrm{s}` | `3\,\mathrm{m}, 2\,\mathrm{kg}, 5\,\mathrm{s}` |
+| 电流、温度、物质的量、发光强度 | 安培 `\mathrm{A}`；开尔文 `\mathrm{K}`；摩尔 `\mathrm{mol}`；坎德拉 `\mathrm{cd}` | `2\,\mathrm{A}, 300\,\mathrm{K}, 5\,\mathrm{cd}` |
+| 速度、加速度 | 米每秒 `\mathrm{m/s}`；米每二次方秒 `\mathrm{m/s^2}` | `9.8\,\mathrm{m/s^2}` |
+| 力、能量、功率 | 牛顿 `\mathrm{N}`；焦耳 `\mathrm{J}`；瓦特 `\mathrm{W}` | `10\,\mathrm{N}, 5\,\mathrm{J}` |
+| 压强、电荷、电压 | 帕斯卡 `\mathrm{Pa}`；库仑 `\mathrm{C}`；伏特 `\mathrm{V}` | `101\,\mathrm{kPa}, 2\,\mathrm{C}` |
+| 频率、电阻、电容 | 赫兹 `\mathrm{Hz}`；欧姆 `\mathrm{\Omega}`；法拉 `\mathrm{F}` | `50\,\mathrm{Hz}, 10\,\mathrm{\Omega}` |
+| 磁场、磁通量 | 特斯拉 `\mathrm{T}`；韦伯 `\mathrm{Wb}` | `0.2\,\mathrm{T}` |
+
+### 常见物理常数
+
+| 常数 | 符号 | 近似值（SI） |
+| --- | --- | --- |
+| 光速 | `c` | `3.00\times10^8\,\mathrm{m/s}` |
+| 重力加速度（近地表） | `g` | `9.81\,\mathrm{m/s^2}` |
+| 普朗克常数 | `h` | `6.626\times10^{-34}\,\mathrm{J\,s}` |
+| 元电荷 | `e` | `1.602\times10^{-19}\,\mathrm{C}` |
+| 阿伏伽德罗常数 | `N_A` | `6.022\times10^{23}\,\mathrm{mol^{-1}}` |
+
+完整物理公式示例：
+
+```markdown
+$$
+E_k=\frac{1}{2}mv^2, \qquad pV=nRT
+$$
+```
+
+$$
+E_k=\frac{1}{2}mv^2, \qquad pV=nRT
+$$
+
 ## 矩阵、分段函数与多行推导
 
 矩阵用 `bmatrix`，列与列之间用 `&`，行与行之间用两个反斜杠 `\\`。这里的 `\\` 表示公式内部换行，和普通 Markdown 换行不同。
@@ -386,5 +652,5 @@ print(math.sin(x) / x)
 - 多字符上下标要用 `{}`，例如 `x^{n+1}`，否则只有紧随 `^` 的一个字符会作为上标。
 - 检查 `{}`、`\left` 与 `\right`、`\begin{...}` 与 `\end{...}` 是否成对。
 - 普通文字中的美元符号可写成 `\$100`，避免被当作公式起点。
-- 只写数学部分，不需要 `\documentclass`、`\usepackage` 或 `\begin{document}`。本站使用 KaTeX，支持常见数学命令；完整 LaTeX 文档和部分扩展宏包命令不适用。
+- 只写数学部分，不需要 `\documentclass`、`\usepackage` 或 `\begin{document}`。本站使用 MathJax 3 的 TeX 数学引擎；完整 LaTeX 文档和依赖未加载扩展包的命令不适用。
 - 先点击“预览”，确认公式和代码正常后再保存。阅读页和个人公开页使用同一套排版规则。

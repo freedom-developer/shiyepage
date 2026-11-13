@@ -33,6 +33,8 @@ export const router = createRouter({
         { path: 'subject/:subjectSlug/:topicPath(.*)*', name: 'public-subject', component: PublicSubjectView },
         { path: 'pdf/:entryId', name: 'public-pdf', component: PublicPdfView, meta: { fullScreenReader: true } },
         { path: 'chm/:entryId', name: 'public-chm', component: () => import('./views/ChmView.vue'), meta: { fullScreenReader: true } },
+        { path: 'search', name: 'public-kernel-search', component: SearchView },
+        { path: 'kernel/linux-6.8/source', name: 'public-kernel-source', component: KernelSourceView, meta: { fullScreenReader: true } },
       ],
     },
     {
@@ -58,8 +60,8 @@ export const router = createRouter({
         { path: 'pdfs', name: 'pdf-management', component: PdfManagementView },
       ],
     },
-    { path: '/search', name: 'search', component: SearchView, meta: { requiresAuth: true } },
-    { path: '/kernel/linux-6.8/source', name: 'kernel-source', component: KernelSourceView, meta: { requiresAuth: true } },
+    { path: '/search', name: 'search', component: SearchView },
+    { path: '/kernel/linux-6.8/source', name: 'kernel-source', component: KernelSourceView },
     { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundView },
   ],
 })

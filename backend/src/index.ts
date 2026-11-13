@@ -26,6 +26,7 @@ import {
 } from './validation.js'
 
 export const prisma = new PrismaClient()
+const publicKernelAccount = 'freedom_developer@163.com'
 
 async function ensureKernelCatalog() {
   let rootEntries: KernelDirectoryEntry[]
@@ -211,7 +212,7 @@ function registerRoutes(app: FastifyInstance) {
     const { account } = request.params as { account: string }
     const user = await prisma.user.findUnique({ where: { email: account.toLowerCase() }, select: { id: true, email: true } })
     if (!user) return reply.code(404).send({ error: 'PROFILE_NOT_FOUND', message: '这个账号的个人主页不存在' })
-    const catalog = await getPublicCatalog(prisma, user.id)
+    const catalog = await getPublicCatalog(prisma, user.id, user.email.toLowerCase() === publicKernelAccount)
     const base = `/api/public/${encodeURIComponent(user.email)}`
     return {
       profile: { account: user.email },
@@ -519,7 +520,6 @@ function registerRoutes(app: FastifyInstance) {
   })
 
   app.get('/api/kernel/linux-6.8/tags', async (request, reply) => {
-    if (!(await requireAuth(request, reply))) return
     const { q, offset, limit } = request.query as { q?: string; offset?: string; limit?: string }
     const query = q?.trim()
     if (!query || query.length > 200 || /[\u0000-\u001f\u007f]/.test(query)) {
@@ -544,7 +544,6 @@ function registerRoutes(app: FastifyInstance) {
   })
 
   app.post('/api/kernel/linux-6.8/tags/lookup', async (request, reply) => {
-    if (!(await requireAuth(request, reply))) return
     const body = request.body as { references?: unknown } | undefined
     const validKinds = new Set(['function', 'struct', 'union', 'enum'])
     if (!Array.isArray(body?.references) || body.references.length > 1000 || body.references.some((reference) =>
@@ -566,7 +565,6 @@ function registerRoutes(app: FastifyInstance) {
   })
 
   app.get('/api/kernel/linux-6.8/source', async (request, reply) => {
-    if (!(await requireAuth(request, reply))) return
     const { file, name, address } = request.query as { file?: string; name?: string; address?: string }
     if (!file || !name || !address || name.length > 200 || address.length > 8192) {
       return reply.code(400).send({ error: 'INVALID_SOURCE_LOCATION', message: '源码定位信息不完整或过长' })
@@ -596,7 +594,6 @@ function registerRoutes(app: FastifyInstance) {
   })
 
   app.get('/api/kernel/linux-6.8/directory', async (request, reply) => {
-    if (!(await requireAuth(request, reply))) return
     const { path: relativePath } = request.query as { path?: string }
     try {
       return await readKernelDirectory(config.kernelSourceDir, relativePath ?? '')
@@ -612,7 +609,6 @@ function registerRoutes(app: FastifyInstance) {
   })
 
   app.get('/api/kernel/linux-6.8/file', async (request, reply) => {
-    if (!(await requireAuth(request, reply))) return
     const { path: relativePath } = request.query as { path?: string }
     if (!relativePath) {
       return reply.code(400).send({ error: 'INVALID_SOURCE_LOCATION', message: '源码文件路径无效' })

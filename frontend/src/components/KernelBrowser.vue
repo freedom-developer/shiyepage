@@ -4,12 +4,13 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { apiRequest } from '../lib/api'
 import KernelCodeViewer from './KernelCodeViewer.vue'
 import type { KernelCodeTag } from '../lib/kernel-code'
+import { publicKernelRequest, publicKernelSearchRoute } from '../data/public-profile'
 
 interface KernelDirectoryEntry { name: string; path: string; slug: string; kind: 'directory' | 'file' }
 interface KernelDirectory { path: string; entries: KernelDirectoryEntry[] }
 interface KernelSourceFile { file: string; startLine: number; lines: string[]; symbols: Record<string, KernelCodeTag> }
 
-const props = defineProps<{ subjectSlug: string; topicPath: string[]; versionPath: string[]; initialDirectory?: string }>()
+const props = defineProps<{ subjectSlug: string; topicPath: string[]; versionPath: string[]; initialDirectory?: string; publicAccount?: string }>()
 const route = useRoute()
 const router = useRouter()
 const directory = ref<KernelDirectory>()
@@ -25,7 +26,12 @@ function directorySlug(name: string) {
 }
 
 function subjectRoute(topicPath: string[], query: Record<string, string> = {}) {
+  if (props.publicAccount) return { name: 'public-subject', params: { account: props.publicAccount, subjectSlug: props.subjectSlug, topicPath }, query }
   return { name: 'subject', params: { subjectSlug: props.subjectSlug, topicPath }, query }
+}
+
+function kernelRequest<T>(path: string) {
+  return props.publicAccount ? publicKernelRequest<T>(props.publicAccount, path) : apiRequest<T>(path)
 }
 
 async function loadDirectory() {
@@ -36,14 +42,14 @@ async function loadDirectory() {
   try {
     let path = routeDirectory.value || props.initialDirectory || ''
     if (!path && props.topicPath.length > props.versionPath.length) {
-      const root = await apiRequest<KernelDirectory>('/api/kernel/linux-6.8/directory')
+      const root = await kernelRequest<KernelDirectory>('/api/kernel/linux-6.8/directory')
       const rootSlug = props.topicPath[props.versionPath.length]
       const rootDirectory = root.entries.find((entry) => entry.kind === 'directory' && entry.slug === rootSlug)
       if (!rootDirectory) throw new Error('没有找到对应的 Linux-6.8 子目录')
       path = rootDirectory.path
     }
     const query = path ? `?path=${encodeURIComponent(path)}` : ''
-    directory.value = await apiRequest<KernelDirectory>(`/api/kernel/linux-6.8/directory${query}`)
+    directory.value = await kernelRequest<KernelDirectory>(`/api/kernel/linux-6.8/directory${query}`)
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : '源码目录加载失败'
   } finally { loading.value = false }
@@ -57,7 +63,7 @@ async function loadFile() {
   error.value = ''
   try {
     const query = new URLSearchParams({ path: filePath.value })
-    sourceFile.value = await apiRequest<KernelSourceFile>(`/api/kernel/linux-6.8/file?${query}`)
+    sourceFile.value = await kernelRequest<KernelSourceFile>(`/api/kernel/linux-6.8/file?${query}`)
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : '源码文件加载失败'
   } finally {
@@ -94,7 +100,7 @@ watch(() => [props.topicPath.join('/'), route.query.dir, route.query.file] as co
   <section class="kernel-browser">
     <div class="kernel-browser-heading">
       <div><span class="eyebrow">LINUX SOURCE TREE</span><h1>Linux-6.8</h1><p>源码文件从本地只读目录按需读取，tags 符号可通过全局搜索定位。</p></div>
-      <RouterLink :to="{ name: 'search', query: { scope: 'kernel' } }" class="button-primary kernel-symbol-search">搜索符号 <span>⌕</span></RouterLink>
+      <RouterLink :to="publicAccount ? publicKernelSearchRoute(publicAccount) : { name: 'search', query: { scope: 'kernel' } }" class="button-primary kernel-symbol-search">搜索符号 <span>⌕</span></RouterLink>
     </div>
 
     <nav v-if="directory" class="kernel-browser-breadcrumb" aria-label="源码目录路径">
@@ -115,7 +121,7 @@ watch(() => [props.topicPath.join('/'), route.query.dir, route.query.file] as co
 
     <section v-else-if="sourceFile" class="kernel-file-view">
       <div class="kernel-file-heading"><div><span class="eyebrow">READ-ONLY SOURCE</span><h2>{{ sourceFile.file }}</h2><p>完整源码 · {{ sourceFile.lines.length }} 行</p></div><button class="text-button" type="button" @click="router.push(subjectRoute(props.topicPath, route.query.dir ? { dir: String(route.query.dir) } : {}))">返回目录</button></div>
-      <KernelCodeViewer :file="sourceFile.file" :start-line="sourceFile.startLine" :lines="sourceFile.lines" :symbols="sourceFile.symbols" />
+      <KernelCodeViewer :file="sourceFile.file" :start-line="sourceFile.startLine" :lines="sourceFile.lines" :symbols="sourceFile.symbols" :public-account="publicAccount" />
     </section>
   </section>
 </template>

@@ -40,7 +40,7 @@ async function load() {
   } finally { if (current === version.value) loading.value = false }
   if (content.value) {
     rendering.value = true
-    try { const output = await renderMarkdown(content.value); if (current === version.value) rendered.value = output }
+    try { const output = await renderMarkdown(content.value, props.publicAccount); if (current === version.value) rendered.value = output }
     catch { if (current === version.value) error.value = '笔记内容渲染失败' }
     finally { if (current === version.value) rendering.value = false }
   }
@@ -51,7 +51,7 @@ onBeforeUnmount(() => { version.value++ })
 
 <template>
   <article v-if="entry && subject" class="note-reader">
-    <header class="reader-header"><div class="reader-header-top"><span class="entry-type type-note">学习笔记</span><button v-if="canEdit" type="button" class="text-button" @click="emit('edit', entry.id)">编辑笔记</button></div><h1>{{ title || entry.title }}</h1><p>{{ summary || entry.summary }}</p><div class="reader-meta"><span>更新于 {{ entry.updatedAt }}</span><span>Markdown · KaTeX · Shiki</span></div></header>
+    <header class="reader-header"><div class="reader-header-top"><span class="entry-type type-note">学习笔记</span><button v-if="canEdit" type="button" class="text-button" @click="emit('edit', entry.id)">编辑笔记</button></div><h1>{{ title || entry.title }}</h1><p>{{ summary || entry.summary }}</p><div class="reader-meta"><span>更新于 {{ entry.updatedAt }}</span><span>Markdown · MathJax · Shiki</span></div></header>
     <div v-if="loading" class="loading-state">正在加载笔记…</div><div v-else-if="rendering" class="loading-state">正在整理页面内容…</div><div v-else-if="rendered" class="markdown-body" v-html="rendered"></div><div v-else class="empty-state"><span class="empty-state-icon">✳</span><div><h3>笔记内容暂未找到</h3><p>{{ error || '这篇笔记还没有正文。' }}</p></div></div>
     <p v-if="error && rendered" class="form-error">{{ error }}</p>
   </article>

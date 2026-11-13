@@ -2,11 +2,11 @@
 import { computed, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import NavigationTree from './NavigationTree.vue'
-import type { CatalogNode, Subject } from '../data/catalog'
+import type { CatalogNode, LearningEntry, Subject } from '../data/catalog'
 import { loadCatalog } from '../data/catalog'
 import { apiRequest } from '../lib/api'
 
-const props = defineProps<{ subject: Subject; activePath?: string[]; readOnly?: boolean; account?: string }>()
+const props = defineProps<{ subject: Subject; entries?: LearningEntry[]; activePath?: string[]; readOnly?: boolean; account?: string }>()
 const route = useRoute()
 const router = useRouter()
 const menuOpen = ref(false)
@@ -68,7 +68,7 @@ async function removeNode(node: CatalogNode, path: string[]) {
     <div class="sidebar-heading"><h2>{{ subject.title }}</h2><p>{{ subject.description }}</p></div>
     <nav :aria-label="`${subject.title}目录`">
       <div v-if="!readOnly" class="sidebar-root-action"><button type="button" class="sidebar-add-button" @click="openMenu()">添加子菜单 <span>＋</span></button></div>
-      <NavigationTree :nodes="subject.nodes" :subject-slug="subject.slug" :active-path="activePath" :read-only="readOnly" :account="account" :collapsed-paths="collapsedPaths" @add="openMenu" @remove="removeNode" @toggle="toggleSubmenu" />
+      <NavigationTree :nodes="subject.nodes" :subject-slug="subject.slug" :entries="entries" :active-path="activePath" :read-only="readOnly" :account="account" :collapsed-paths="collapsedPaths" @add="openMenu" @remove="removeNode" @toggle="toggleSubmenu" />
     </nav>
     <p v-if="error" class="sidebar-error" role="alert">{{ error }}</p>
     <div v-if="menuOpen && !readOnly" class="sidebar-action-panel">

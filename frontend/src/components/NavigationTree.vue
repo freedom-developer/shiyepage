@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RouterLink } from 'vue-router'
-import type { CatalogNode } from '../data/catalog'
-import { publicSubjectRoute } from '../data/public-profile'
+import { RouterLink, useRoute } from 'vue-router'
+import type { CatalogNode, LearningEntry } from '../data/catalog'
+import { publicEntryRoute, publicSubjectRoute } from '../data/public-profile'
 
 defineOptions({ name: 'NavigationTree' })
 
 const props = defineProps<{
   nodes: CatalogNode[]
   subjectSlug: string
+  entries?: LearningEntry[]
   parentPath?: string[]
   activePath?: string[]
   readOnly?: boolean
@@ -24,6 +25,7 @@ const emit = defineEmits<{
 }>()
 
 const parent = computed(() => props.parentPath ?? [])
+const route = useRoute()
 
 function relayAdd(node: CatalogNode, path: string[]) { emit('add', node, path) }
 function relayAddNote(node: CatalogNode, path: string[]) { emit('addNote', node, path) }
@@ -50,8 +52,16 @@ function isKernelSourceRoot(node: CatalogNode) {
   return node.slug === 'linux-6-8' && (props.subjectSlug === 'linux-kernel' || parent.value.some((part) => part === 'linux-kernel'))
 }
 
+function notesFor(node: CatalogNode) {
+  if (isKernelSourceRoot(node) || [...parent.value, node.slug].includes('linux-6-8')) return []
+  const path = [...parent.value, node.slug]
+  return (props.entries ?? []).filter((entry) => entry.kind === 'note' &&
+    entry.subjectSlug === props.subjectSlug && entry.topicPath.length === path.length &&
+    path.every((part, index) => entry.topicPath[index] === part))
+}
+
 function hasVisibleChildren(node: CatalogNode) {
-  return Boolean(node.children?.length && !isKernelSourceRoot(node))
+  return Boolean((node.children?.length && !isKernelSourceRoot(node)) || notesFor(node).length)
 }
 
 function isExpanded(node: CatalogNode) {
@@ -60,6 +70,10 @@ function isExpanded(node: CatalogNode) {
 
 function activateNode(node: CatalogNode) {
   if (hasVisibleChildren(node)) emit('toggle', [...parent.value, node.slug])
+}
+
+function noteRoute(entry: LearningEntry) {
+  return props.account ? publicEntryRoute(props.account, entry) : { name: 'note', params: { entryId: entry.id } }
 }
 </script>
 
@@ -83,6 +97,7 @@ function activateNode(node: CatalogNode) {
         v-if="hasVisibleChildren(node) && isExpanded(node)"
         :nodes="node.children ?? []"
         :subject-slug="subjectSlug"
+        :entries="entries"
         :parent-path="[...parent, node.slug]"
         :active-path="activePath"
         :read-only="readOnly"
@@ -93,6 +108,13 @@ function activateNode(node: CatalogNode) {
         @remove="relayRemove"
         @toggle="emit('toggle', $event)"
       />
+      <ul v-if="hasVisibleChildren(node) && isExpanded(node) && notesFor(node).length" class="tree-list tree-note-list">
+        <li v-for="entry in notesFor(node)" :key="entry.id" class="tree-item">
+          <RouterLink :to="noteRoute(entry)" class="tree-link tree-note-link" :class="{ 'is-active': activePath?.join('/') === entry.topicPath.join('/') && (account ? route.query.note === entry.id : route.name === 'note' && route.params.entryId === entry.id) }">
+            <span>{{ entry.title }}</span>
+          </RouterLink>
+        </li>
+      </ul>
     </li>
   </ul>
 </template>

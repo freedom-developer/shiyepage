@@ -47,8 +47,9 @@ function tokenStyle(token: { color?: string; bgColor?: string; fontStyle?: numbe
   return styles.join(';')
 }
 
-function tagHref(tag: KernelCodeTag): string {
+function tagHref(tag: KernelCodeTag, publicAccount?: string): string {
   const query = new URLSearchParams({ file: tag.file, name: tag.name, address: tag.address, q: tag.name, scope: 'kernel' })
+  if (publicAccount) return `/u/${encodeURIComponent(publicAccount)}/kernel/linux-6.8/source?${query.toString()}`
   return `/kernel/linux-6.8/source?${query.toString()}`
 }
 
@@ -60,15 +61,15 @@ interface CodeToken {
   explanation?: Array<{ content: string; scopes: Array<{ scopeName: string }> }>
 }
 
-function renderIdentifier(name: string, symbols: Record<string, KernelCodeTag>): string {
+function renderIdentifier(name: string, symbols: Record<string, KernelCodeTag>, publicAccount?: string): string {
   const escapedName = escapeHtml(name)
   const tag = symbols[name]
   return tag
-    ? `<a class="source-symbol-link" data-symbol="${escapedName}" href="${escapeHtml(tagHref(tag))}" title="跳转到 ${escapeHtml(tag.name)} 的定义">${escapedName}</a>`
+    ? `<a class="source-symbol-link" data-symbol="${escapedName}" href="${escapeHtml(tagHref(tag, publicAccount))}" title="跳转到 ${escapeHtml(tag.name)} 的定义">${escapedName}</a>`
     : escapedName
 }
 
-function renderCExplanation(token: CodeToken, style: string, symbols: Record<string, KernelCodeTag>): string {
+function renderCExplanation(token: CodeToken, style: string, symbols: Record<string, KernelCodeTag>, publicAccount?: string): string {
   return (token.explanation ?? []).map((part) => {
     const blocked = part.scopes.some(({ scopeName }) => /^(comment|string|keyword|storage|punctuation)(\.|$)/.test(scopeName))
     let cursor = 0
@@ -77,7 +78,7 @@ function renderCExplanation(token: CodeToken, style: string, symbols: Record<str
       const index = match.index ?? 0
       const name = match[0]
       content += escapeHtml(part.content.slice(cursor, index))
-      content += !blocked && !C_KEYWORDS.has(name) ? renderIdentifier(name, symbols) : escapeHtml(name)
+      content += !blocked && !C_KEYWORDS.has(name) ? renderIdentifier(name, symbols, publicAccount) : escapeHtml(name)
       cursor = index + name.length
     }
     content += escapeHtml(part.content.slice(cursor))
@@ -85,14 +86,14 @@ function renderCExplanation(token: CodeToken, style: string, symbols: Record<str
   }).join('')
 }
 
-function renderToken(token: CodeToken, language: string, symbols: Record<string, KernelCodeTag>): string {
+function renderToken(token: CodeToken, language: string, symbols: Record<string, KernelCodeTag>, publicAccount?: string): string {
   const style = tokenStyle(token)
-  if (language === 'c' && token.explanation) return renderCExplanation(token, style, symbols)
+  if (language === 'c' && token.explanation) return renderCExplanation(token, style, symbols, publicAccount)
   const content = escapeHtml(token.content)
   const span = `<span${style ? ` style="${style}"` : ''}>${content}</span>`
   const identifier = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(token.content)
   const keyword = language === 'c' && C_KEYWORDS.has(token.content)
-  return identifier && !keyword ? `<span${style ? ` style="${style}"` : ''}>${renderIdentifier(token.content, symbols)}</span>` : span
+  return identifier && !keyword ? `<span${style ? ` style="${style}"` : ''}>${renderIdentifier(token.content, symbols, publicAccount)}</span>` : span
 }
 
 function tokenizedC(source: string) {
@@ -123,9 +124,10 @@ export async function collectCIdentifiers(source: string): Promise<string[]> {
 export async function highlightCCodeWithKernelLinks(
   source: string,
   symbols: Record<string, KernelCodeTag>,
+  publicAccount?: string,
 ): Promise<string> {
   const lines = await tokenizedC(source)
-  return lines.map((tokens) => tokens.map((token) => renderToken(token as CodeToken, 'c', symbols)).join('')).join('\n')
+  return lines.map((tokens) => tokens.map((token) => renderToken(token as CodeToken, 'c', symbols, publicAccount)).join('')).join('\n')
 }
 
 export async function highlightKernelLines(

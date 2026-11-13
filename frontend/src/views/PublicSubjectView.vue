@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { RouterLink, useRoute, type RouteLocationRaw } from 'vue-router'
 import NoteReader from '../components/NoteReader.vue'
+import KernelBrowser from '../components/KernelBrowser.vue'
 import { findNode } from '../data/catalog'
 import { publicEntryRoute, publicHomeRoute, publicSubjectRoute, usePublicProfile } from '../data/public-profile'
 
@@ -13,6 +14,13 @@ const topicPath = computed(() => {
   return Array.isArray(path) ? path : typeof path === 'string' && path ? path.split('/') : []
 })
 const selectedNode = computed(() => subject.value ? findNode(subject.value.nodes, topicPath.value) : undefined)
+const kernelVersionIndex = computed(() => {
+  const index = topicPath.value.indexOf('linux-6-8')
+  if (index < 0) return -1
+  return subject.value?.slug === 'linux-kernel' || topicPath.value.slice(0, index).some((slug) => slug === 'linux-kernel') ? index : -1
+})
+const isKernelPath = computed(() => kernelVersionIndex.value >= 0)
+const kernelVersionPath = computed(() => topicPath.value.slice(0, kernelVersionIndex.value + 1))
 const validLocation = computed(() => Boolean(subject.value && (!topicPath.value.length || selectedNode.value)))
 const childNodes = computed(() => selectedNode.value ? selectedNode.value.children ?? [] : subject.value?.nodes ?? [])
 const visibleEntries = computed(() => {
@@ -47,6 +55,9 @@ const breadcrumbs = computed(() => {
   <div v-if="subject && validLocation" class="subject-view">
     <nav class="breadcrumb" aria-label="面包屑"><template v-for="(item, index) in breadcrumbs" :key="`${index}-${item.title}`"><span v-if="index" aria-hidden="true">/</span><RouterLink v-if="item.to" :to="item.to">{{ item.title }}</RouterLink><span v-else aria-current="page">{{ item.title }}</span></template></nav>
 
+    <KernelBrowser v-if="isKernelPath" :subject-slug="subject.slug" :topic-path="topicPath" :version-path="kernelVersionPath" :public-account="account" />
+
+    <template v-else>
     <section v-if="noteId" class="note-workspace">
       <NoteReader v-if="selectedNote" :entry-id="selectedNote.id" :public-account="account" :public-entry="selectedNote" :public-subject="subject" read-only />
       <div v-else class="empty-state"><div><h3>这篇笔记未公开或不属于当前目录</h3><p>请返回目录查看作者分享的资料。</p></div></div>
@@ -71,6 +82,7 @@ const breadcrumbs = computed(() => {
         <div class="section-heading compact-heading"><h2>资料文件</h2><span class="section-aside">{{ files.length }} 项</span></div>
         <div class="resource-grid"><RouterLink v-for="entry in files" :key="entry.id" :to="publicEntryRoute(account, entry)" target="_blank" rel="noopener noreferrer" class="resource-card"><div class="resource-card-top"><span class="entry-type" :class="entry.kind === 'pdf' ? 'type-pdf' : 'type-chm'">{{ entry.kind.toUpperCase() }}</span><time :datetime="entry.updatedAt">{{ entry.updatedAt }}</time></div><h3>{{ entry.title }}</h3><p>{{ entry.summary }}</p><span class="resource-open">打开阅读 ↗</span></RouterLink></div>
       </section>
+    </template>
     </template>
   </div>
   <div v-else class="not-found-inline"><h1>这个目录没有公开资料</h1><RouterLink :to="publicHomeRoute(account)" class="text-link">返回个人主页 →</RouterLink></div>
