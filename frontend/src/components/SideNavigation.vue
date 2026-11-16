@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import NavigationTree from './NavigationTree.vue'
 import type { CatalogNode, LearningEntry, Subject } from '../data/catalog'
-import { loadCatalog } from '../data/catalog'
+import { flattenNodes, loadCatalog } from '../data/catalog'
 import { apiRequest } from '../lib/api'
 
 const props = defineProps<{ subject: Subject; entries?: LearningEntry[]; activePath?: string[]; readOnly?: boolean; account?: string }>()
@@ -16,9 +16,21 @@ const slug = ref('')
 const description = ref('')
 const parentPath = ref<string[]>([])
 const actionNode = ref<CatalogNode>()
+const movingNode = ref<CatalogNode>()
+const movingPath = ref<string[]>([])
+const moveTarget = ref('')
 const busy = ref(false)
 const error = ref('')
 const actionLabel = computed(() => actionNode.value ? `在“${actionNode.value.title}”下添加` : '添加学科子菜单')
+const moveOptions = computed(() => {
+  if (!movingNode.value) return []
+  const oldPath = movingPath.value
+  const excluded = new Set([oldPath.join('/')])
+  return flattenNodes(props.subject.nodes).filter(({ path }) =>
+    path.join('/') !== oldPath.slice(0, -1).join('/') &&
+    !path.some((_, index) => excluded.has(path.slice(0, index + 1).join('/'))),
+  )
+})
 
 function makeSlug(value: string, fallback: string) {
   return value.trim() || fallback.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `menu-${Date.now().toString(36)}`
@@ -28,6 +40,14 @@ function openMenu(node?: CatalogNode, path?: string[]) {
   actionNode.value = node; parentPath.value = path ?? []; title.value = ''; slug.value = ''; description.value = ''; error.value = ''; menuOpen.value = true
 }
 function closeMenu() { if (!busy.value) menuOpen.value = false }
+function openMove(node: CatalogNode, path: string[]) {
+  if (props.readOnly) return
+  error.value = ''
+  movingNode.value = node
+  movingPath.value = path
+  moveTarget.value = moveOptions.value[0]?.path.join('/') ?? ''
+}
+function closeMove() { if (!busy.value) movingNode.value = undefined }
 function toggleSubmenu(path: string[]) {
   const key = path.join('/')
   const next = new Set(collapsedPaths.value)
@@ -61,6 +81,26 @@ async function removeNode(node: CatalogNode, path: string[]) {
   } catch (reason) { error.value = reason instanceof Error ? reason.message : '菜单删除失败' }
   finally { busy.value = false }
 }
+async function moveMenu() {
+  if (!movingNode.value || !moveTarget.value || busy.value) return
+  const node = movingNode.value
+  const oldPath = movingPath.value
+  const targetPath = moveTarget.value.split('/').filter(Boolean)
+  busy.value = true; error.value = ''
+  try {
+    await apiRequest(`/api/admin/nodes/${encodeURIComponent(node.id)}/move`, {
+      method: 'POST',
+      body: JSON.stringify({ subjectSlug: props.subject.slug, parentPath: targetPath }),
+    })
+    await loadCatalog()
+    movingNode.value = undefined
+    const current = Array.isArray(route.params.topicPath) ? route.params.topicPath : typeof route.params.topicPath === 'string' ? route.params.topicPath.split('/').filter(Boolean) : []
+    if (current.length >= oldPath.length && oldPath.every((part, index) => current[index] === part)) {
+      await router.replace({ name: 'subject', params: { subjectSlug: props.subject.slug, topicPath: [...targetPath, node.slug, ...current.slice(oldPath.length)] }, query: route.query })
+    }
+  } catch (reason) { error.value = reason instanceof Error ? reason.message : '菜单移动失败' }
+  finally { busy.value = false }
+}
 </script>
 
 <template>
@@ -68,9 +108,18 @@ async function removeNode(node: CatalogNode, path: string[]) {
     <div class="sidebar-heading"><h2>{{ subject.title }}</h2><p>{{ subject.description }}</p></div>
     <nav :aria-label="`${subject.title}目录`">
       <div v-if="!readOnly" class="sidebar-root-action"><button type="button" class="sidebar-add-button" @click="openMenu()">添加子菜单 <span>＋</span></button></div>
-      <NavigationTree :nodes="subject.nodes" :subject-slug="subject.slug" :entries="entries" :active-path="activePath" :read-only="readOnly" :account="account" :collapsed-paths="collapsedPaths" @add="openMenu" @remove="removeNode" @toggle="toggleSubmenu" />
+      <NavigationTree :nodes="subject.nodes" :subject-slug="subject.slug" :entries="entries" :active-path="activePath" :read-only="readOnly" :account="account" :collapsed-paths="collapsedPaths" @add="openMenu" @remove="removeNode" @move="openMove" @toggle="toggleSubmenu" />
     </nav>
     <p v-if="error" class="sidebar-error" role="alert">{{ error }}</p>
+    <div v-if="movingNode && !readOnly" class="sidebar-action-panel">
+      <div class="sidebar-action-heading"><strong>移动“{{ movingNode.title }}”</strong><button type="button" class="text-button" :disabled="busy" @click="closeMove">取消</button></div>
+      <form v-if="moveOptions.length" class="sidebar-form" @submit.prevent="moveMenu">
+        <label>移动到<select v-model="moveTarget" required><option v-for="option in moveOptions" :key="option.path.join('/')" :value="option.path.join('/')">{{ '　'.repeat(option.path.length - 1) }}{{ option.node.title }}</option></select></label>
+        <p class="form-help">整个子菜单及其中的笔记、资料都会一起移动。</p>
+        <button type="submit" class="button-primary" :disabled="busy || !moveTarget">{{ busy ? '移动中…' : '确认移动' }} <span>↗</span></button>
+      </form>
+      <p v-else class="form-help">当前没有可移动到的其他子菜单。</p>
+    </div>
     <div v-if="menuOpen && !readOnly" class="sidebar-action-panel">
       <div class="sidebar-action-heading"><strong>{{ actionLabel }}</strong><button type="button" class="text-button" :disabled="busy" @click="closeMenu">关闭</button></div>
       <div v-if="actionNode" class="sidebar-action-choice"><button type="button" class="text-button is-active">子菜单</button><button type="button" class="text-button" @click="createNote">笔记</button></div>

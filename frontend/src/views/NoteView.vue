@@ -36,9 +36,12 @@ const breadcrumbs = computed(() => {
   return items
 })
 
-async function renderSource(source: string) {
+async function renderSource(source: string, saved = false) {
   isRendering.value = true
   try { rendered.value = await renderMarkdown(source) }
+  catch {
+    error.value = saved ? '笔记已保存，但正文排版失败，请重新打开查看。' : '笔记已加载，但正文排版失败，请重试。'
+  }
   finally { isRendering.value = false }
 }
 
@@ -55,18 +58,18 @@ async function loadNote(currentEntry: typeof entry.value) {
     resource.value = result.resource
     draft.value = result.resource.content ?? ''
     canEdit.value = result.canEdit
-  } catch {
+  } catch (reason) {
     const fallback = getNoteContent(currentEntry)
     if (fallback) {
       draft.value = fallback
       resource.value = { title: currentEntry.title, summary: currentEntry.summary, updatedAt: currentEntry.updatedAt, content: fallback }
-    } else error.value = authState.user ? '笔记内容加载失败' : '这篇笔记需要登录后访问'
+    } else error.value = reason instanceof Error ? reason.message : authState.user ? '笔记内容加载失败' : '这篇笔记需要登录后访问'
   } finally { isLoading.value = false }
   if (draft.value) await renderSource(draft.value)
 }
 
 async function saveNote() {
-  if (!entry.value) return
+  if (!entry.value || isSaving.value) return
   isSaving.value = true
   error.value = ''
   try {
@@ -76,9 +79,12 @@ async function saveNote() {
     })
     resource.value = result.resource
     isEditing.value = false
-    await renderSource(draft.value)
-  } catch (reason) { error.value = reason instanceof Error ? reason.message : '笔记保存失败' }
+  } catch (reason) {
+    error.value = reason instanceof Error ? reason.message : '笔记保存失败'
+    return
+  }
   finally { isSaving.value = false }
+  await renderSource(draft.value, true)
 }
 
 watch(entry, (currentEntry) => { void loadNote(currentEntry) }, { immediate: true })

@@ -21,6 +21,7 @@ const emit = defineEmits<{
   add: [node: CatalogNode, path: string[]]
   addNote: [node: CatalogNode, path: string[]]
   remove: [node: CatalogNode, path: string[]]
+  move: [node: CatalogNode, path: string[]]
   toggle: [path: string[]]
 }>()
 
@@ -30,6 +31,7 @@ const route = useRoute()
 function relayAdd(node: CatalogNode, path: string[]) { emit('add', node, path) }
 function relayAddNote(node: CatalogNode, path: string[]) { emit('addNote', node, path) }
 function relayRemove(node: CatalogNode, path: string[]) { emit('remove', node, path) }
+function relayMove(node: CatalogNode, path: string[]) { emit('move', node, path) }
 
 function routeFor(node: CatalogNode) {
   if (props.account) return publicSubjectRoute(props.account, props.subjectSlug, [...parent.value, node.slug])
@@ -68,8 +70,8 @@ function isExpanded(node: CatalogNode) {
   return !props.collapsedPaths?.has([...parent.value, node.slug].join('/'))
 }
 
-function activateNode(node: CatalogNode) {
-  if (hasVisibleChildren(node)) emit('toggle', [...parent.value, node.slug])
+function toggleNode(node: CatalogNode) {
+  emit('toggle', [...parent.value, node.slug])
 }
 
 function noteRoute(entry: LearningEntry) {
@@ -84,37 +86,54 @@ function noteRoute(entry: LearningEntry) {
         :to="routeFor(node)"
         class="tree-link"
         :class="{ 'is-active': isActive(node), 'has-children': hasVisibleChildren(node), 'is-readonly': readOnly }"
-        :aria-expanded="hasVisibleChildren(node) ? isExpanded(node) : undefined"
-        @click="activateNode(node)"
       >
         <span>{{ node.title }}</span>
       </RouterLink>
-      <div v-if="!readOnly" class="tree-actions">
-        <button type="button" class="tree-action" :aria-label="`在${node.title}下添加`" title="添加下级菜单或笔记" @click="emit('add', node, [...parent, node.slug])">＋</button>
-        <button type="button" class="tree-action tree-action-danger" :aria-label="`删除${node.title}`" title="删除菜单" @click="emit('remove', node, [...parent, node.slug])">−</button>
+      <div v-if="hasVisibleChildren(node) || !readOnly" class="tree-controls">
+        <button
+          v-if="hasVisibleChildren(node)"
+          type="button"
+          class="tree-action tree-toggle"
+          :aria-label="`${isExpanded(node) ? '折叠' : '展开'}${node.title}`"
+          :aria-expanded="isExpanded(node)"
+          :title="`${isExpanded(node) ? '折叠' : '展开'}${node.title}`"
+          @click="toggleNode(node)"
+        >{{ isExpanded(node) ? '<' : '>' }}</button>
+        <template v-if="!readOnly">
+          <button type="button" class="tree-action" :aria-label="`在${node.title}下添加`" title="添加下级菜单或笔记" @click="emit('add', node, [...parent, node.slug])">＋</button>
+          <button type="button" class="tree-action" :aria-label="`移动${node.title}`" title="移动到其他子菜单" @click="emit('move', node, [...parent, node.slug])">↗</button>
+          <button type="button" class="tree-action tree-action-danger" :aria-label="`删除${node.title}`" title="删除菜单" @click="emit('remove', node, [...parent, node.slug])">−</button>
+        </template>
       </div>
-      <NavigationTree
-        v-if="hasVisibleChildren(node) && isExpanded(node)"
-        :nodes="node.children ?? []"
-        :subject-slug="subjectSlug"
-        :entries="entries"
-        :parent-path="[...parent, node.slug]"
-        :active-path="activePath"
-        :read-only="readOnly"
-        :account="account"
-        :collapsed-paths="collapsedPaths"
-        @add="relayAdd"
-        @add-note="relayAddNote"
-        @remove="relayRemove"
-        @toggle="emit('toggle', $event)"
-      />
-      <ul v-if="hasVisibleChildren(node) && isExpanded(node) && notesFor(node).length" class="tree-list tree-note-list">
-        <li v-for="entry in notesFor(node)" :key="entry.id" class="tree-item">
-          <RouterLink :to="noteRoute(entry)" class="tree-link tree-note-link" :class="{ 'is-active': activePath?.join('/') === entry.topicPath.join('/') && (account ? route.query.note === entry.id : route.name === 'note' && route.params.entryId === entry.id) }">
-            <span>{{ entry.title }}</span>
-          </RouterLink>
-        </li>
-      </ul>
+      <Transition name="tree-expand">
+        <div v-if="hasVisibleChildren(node) && isExpanded(node)" class="tree-branch">
+          <div class="tree-branch-inner">
+            <NavigationTree
+              v-if="node.children?.length && !isKernelSourceRoot(node)"
+              :nodes="node.children"
+              :subject-slug="subjectSlug"
+              :entries="entries"
+              :parent-path="[...parent, node.slug]"
+              :active-path="activePath"
+              :read-only="readOnly"
+              :account="account"
+              :collapsed-paths="collapsedPaths"
+              @add="relayAdd"
+              @add-note="relayAddNote"
+              @remove="relayRemove"
+              @move="relayMove"
+              @toggle="emit('toggle', $event)"
+            />
+            <ul v-if="notesFor(node).length" class="tree-list tree-note-list">
+              <li v-for="entry in notesFor(node)" :key="entry.id" class="tree-item">
+                <RouterLink :to="noteRoute(entry)" class="tree-link tree-note-link" :class="{ 'is-active': activePath?.join('/') === entry.topicPath.join('/') && (account ? route.query.note === entry.id : route.name === 'note' && route.params.entryId === entry.id) }">
+                  <span>{{ entry.title }}</span>
+                </RouterLink>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </Transition>
     </li>
   </ul>
 </template>

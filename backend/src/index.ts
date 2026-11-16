@@ -18,6 +18,7 @@ import {
   loginSchema,
   noteCreateSchema,
   nodeCreateSchema,
+  nodeMoveSchema,
   progressSchema,
   registerSchema,
   resourcePatchSchema,
@@ -697,6 +698,66 @@ function registerRoutes(app: FastifyInstance) {
     } catch {
       return reply.code(409).send({ error: 'SLUG_EXISTS', message: '同级目录 slug 已存在' })
     }
+  })
+
+  app.post('/api/admin/nodes/:id/move', async (request, reply) => {
+    if (!(await requireAuth(request, reply))) return
+    const { id } = request.params as { id: string }
+    const input = nodeMoveSchema.safeParse(request.body)
+    if (!input.success) return reply.code(400).send({ error: 'INVALID_INPUT', message: input.error.issues[0]?.message })
+    const result = await prisma.$transaction(async (tx) => {
+      const node = await tx.catalogNode.findUnique({ where: { id } })
+      if (!node) return { ok: false as const, status: 404, error: 'NODE_NOT_FOUND', message: '菜单不存在' }
+      const subject = await tx.subject.findUnique({ where: { slug: input.data.subjectSlug }, select: { id: true } })
+      if (!subject || subject.id !== node.subjectId) return { ok: false as const, status: 400, error: 'INVALID_SUBJECT', message: '只能在当前学科内移动菜单' }
+
+      const nodes = await tx.catalogNode.findMany({ where: { subjectId: node.subjectId }, select: { id: true, parentId: true, slug: true } })
+      const byId = new Map(nodes.map((item) => [item.id, item]))
+      const descendants = new Set([node.id])
+      let changed = true
+      while (changed) {
+        changed = false
+        for (const item of nodes) {
+          if (item.parentId && descendants.has(item.parentId) && !descendants.has(item.id)) {
+            descendants.add(item.id)
+            changed = true
+          }
+        }
+      }
+      let parentId: string | null = null
+      for (const slug of input.data.parentPath) {
+        const parent = nodes.find((item) => item.parentId === parentId && item.slug === slug)
+        if (!parent) return { ok: false as const, status: 404, error: 'PARENT_NOT_FOUND', message: '目标子菜单不存在' }
+        if (descendants.has(parent.id)) return { ok: false as const, status: 400, error: 'MOVE_CYCLE', message: '不能将菜单移动到自身或下级菜单中' }
+        parentId = parent.id
+      }
+      if (parentId === node.parentId) return { ok: false as const, status: 400, error: 'SAME_PARENT', message: '该菜单已经位于目标位置' }
+
+      const depths = new Map<string, number>()
+      for (const item of nodes) {
+        let depth = 1
+        let ancestorId = item.parentId
+        while (ancestorId) {
+          depth += 1
+          ancestorId = byId.get(ancestorId)?.parentId ?? null
+        }
+        depths.set(item.id, depth)
+      }
+      const sourceDepth = depths.get(node.id) ?? 1
+      const subtreeDepth = Math.max(...[...descendants].map((descendantId) => (depths.get(descendantId) ?? sourceDepth) - sourceDepth + 1))
+      if (input.data.parentPath.length + subtreeDepth > 8) return { ok: false as const, status: 400, error: 'MAX_DEPTH', message: '移动后子菜单不能超过 8 层' }
+
+      const duplicate = await tx.catalogNode.findFirst({
+        where: { subjectId: node.subjectId, parentId, slug: node.slug, id: { not: node.id } },
+        select: { id: true },
+      })
+      if (duplicate) return { ok: false as const, status: 409, error: 'SLUG_EXISTS', message: '目标菜单下已存在同名标识的子菜单' }
+      const last = await tx.catalogNode.aggregate({ where: { subjectId: node.subjectId, parentId }, _max: { sortOrder: true } })
+      const moved = await tx.catalogNode.update({ where: { id: node.id }, data: { parentId, sortOrder: (last._max.sortOrder ?? -1) + 1 } })
+      return { ok: true as const, node: moved }
+    })
+    if (!result.ok) return reply.code(result.status).send({ error: result.error, message: result.message })
+    return { node: result.node }
   })
 
   app.delete('/api/admin/subjects/:slug', async (request, reply) => {

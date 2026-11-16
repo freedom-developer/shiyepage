@@ -55,3 +55,8 @@ export const nodeCreateSchema = z.object({
   title: z.string().trim().min(1).max(100),
   description: z.string().max(500).optional(),
 })
+
+export const nodeMoveSchema = z.object({
+  subjectSlug: z.string().regex(/^[a-z0-9-]+$/),
+  parentPath: z.array(z.string().regex(/^[a-z0-9-]+$/)).min(1).max(8),
+})

@@ -8,16 +8,24 @@ let markdownPromise: Promise<MarkdownIt> | undefined
 let jsxGraphPromise: Promise<typeof import('jsxgraph').JSXGraph> | undefined
 let plotSequence = 0
 
+function createMarkdownRenderer(): MarkdownIt {
+  return new MarkdownIt({
+    html: false,
+    linkify: true,
+    typographer: true,
+    breaks: false,
+  })
+}
+
 function getMarkdownRenderer(): Promise<MarkdownIt> {
   markdownPromise ??= import('markdown-it-mathjax3').then(({ default: mathjaxPlugin }) => {
-    const renderer = new MarkdownIt({
-      html: false,
-      linkify: true,
-      typographer: true,
-      breaks: false,
-    })
+    const renderer = createMarkdownRenderer()
     renderer.use(mathjaxPlugin)
     return renderer
+  }).catch(() => {
+    markdownPromise = undefined
+    // A failed formula bundle must not hide the note or poison future renders.
+    return createMarkdownRenderer()
   })
   return markdownPromise
 }
@@ -135,6 +143,7 @@ async function renderPlots(container: HTMLElement): Promise<void> {
     jsxGraphPromise ??= import('jsxgraph').then(({ JSXGraph }) => JSXGraph)
     JSXGraph = await jsxGraphPromise
   } catch {
+    jsxGraphPromise = undefined
     for (const code of blocks) {
       const pre = code.parentElement
       if (pre) showDiagramError(pre, '绘图引擎加载失败，请刷新页面后重试。')
@@ -211,60 +220,12 @@ async function renderPlots(container: HTMLElement): Promise<void> {
 let highlighterPromise: Promise<HighlighterCore> | undefined
 
 export function getHighlighter(): Promise<HighlighterCore> {
-  highlighterPromise ??= (async () => {
-    const [
-      { createHighlighterCore },
-      { createJavaScriptRegexEngine },
-      bash,
-      asm,
-      c,
-      css,
-      html,
-      javascript,
-      json,
-      python,
-      rust,
-      sql,
-      typescript,
-      make,
-      githubLight,
-    ] = await Promise.all([
-      import('shiki/core'),
-      import('shiki/engine/javascript'),
-      import('@shikijs/langs/bash'),
-      import('@shikijs/langs/asm'),
-      import('@shikijs/langs/c'),
-      import('@shikijs/langs/css'),
-      import('@shikijs/langs/html'),
-      import('@shikijs/langs/javascript'),
-      import('@shikijs/langs/json'),
-      import('@shikijs/langs/python'),
-      import('@shikijs/langs/rust'),
-      import('@shikijs/langs/sql'),
-      import('@shikijs/langs/typescript'),
-      import('@shikijs/langs/make'),
-      import('@shikijs/themes/github-light'),
-    ])
-
-    return createHighlighterCore({
-      engine: createJavaScriptRegexEngine(),
-      themes: [githubLight.default],
-      langs: [
-        bash.default,
-        asm.default,
-        c.default,
-        css.default,
-        html.default,
-        javascript.default,
-        json.default,
-        python.default,
-        rust.default,
-        sql.default,
-        typescript.default,
-        make.default,
-      ],
+  highlighterPromise ??= import('./syntax-highlighter')
+    .then(({ createNoteHighlighter }) => createNoteHighlighter())
+    .catch((reason: unknown) => {
+      highlighterPromise = undefined
+      throw reason
     })
-  })()
   return highlighterPromise
 }
 
@@ -355,8 +316,11 @@ export async function renderMarkdown(source: string, publicAccount?: string, opt
     }
   }
 
-  const highlighter = await getHighlighter()
   const codeBlocks = Array.from(container.querySelectorAll('pre > code'))
+  // Highlighting is optional. Even without it, Markdown's escaped code is readable.
+  const highlighter = codeBlocks.some((code) => !code.classList.contains('language-plot'))
+    ? await getHighlighter().catch(() => undefined)
+    : undefined
   const cBlocks = codeBlocks.flatMap((code) => {
     const languageClass = Array.from(code.classList).find((className) => className.startsWith('language-'))
     const requestedLanguage = languageClass?.replace('language-', '').toLowerCase()
@@ -365,7 +329,7 @@ export async function renderMarkdown(source: string, publicAccount?: string, opt
       : []
   })
   let symbols: Record<string, KernelCodeTag> = {}
-  if ((authState.user || publicAccount) && cBlocks.length) {
+  if (highlighter && (authState.user || publicAccount) && cBlocks.length) {
     try {
       const { collectCIdentifiers } = await import('./kernel-code')
       const references = new Map<string, { name: string; kind: 'function' | 'struct' | 'union' | 'enum' }>()
@@ -405,7 +369,7 @@ export async function renderMarkdown(source: string, publicAccount?: string, opt
     )
     const requestedLanguage = languageClass?.replace('language-', '') ?? 'text'
     const normalizedLanguage = requestedLanguage.toLowerCase()
-    if (normalizedLanguage === 'plot') continue
+    if (normalizedLanguage === 'plot' || !highlighter) continue
     const language = highlighter.getLoadedLanguages().includes(requestedLanguage)
       ? requestedLanguage
       : 'text'

@@ -38,6 +38,7 @@ test('注册、目录管理和私有资料权限', async (t) => {
       ['POST', '/api/admin/subjects', subject],
       ['DELETE', '/api/admin/subjects/physics', undefined],
       ['POST', '/api/admin/nodes', { subjectSlug: 'physics', slug: 'mechanics', title: '力学' }],
+      ['POST', '/api/admin/nodes/missing/move', { subjectSlug: 'physics', parentPath: ['mechanics'] }],
       ['DELETE', '/api/admin/nodes/missing', undefined],
     ] as const) {
       const response = await app.inject({ method, url, payload })
@@ -324,6 +325,45 @@ test('注册、目录管理和私有资料权限', async (t) => {
     }
     const removedSubject = await app.inject({ method: 'DELETE', url: '/api/admin/subjects/public-demo', headers: ownerHeaders })
     assert.equal(removedSubject.statusCode, 200)
+  })
+
+  await t.test('移动子菜单时保留整棵目录和笔记，并阻止循环与同级标识冲突', async () => {
+    const headers = { authorization: `Bearer ${token}` }
+    const createNode = async (slug: string, title: string, parentPath: string[] = []) => {
+      const response = await app.inject({ method: 'POST', url: '/api/admin/nodes', headers, payload: { subjectSlug: 'physics', slug, title, parentPath } })
+      assert.equal(response.statusCode, 201)
+      return response.json().node.id as string
+    }
+    const sourceId = await createNode('move-source', '待移动目录')
+    await createNode('move-child', '移动时保留的下级', ['move-source'])
+    const targetId = await createNode('move-target', '目标目录')
+    await createNode('move-duplicate', '冲突目标', ['move-target'])
+    const note = await app.inject({ method: 'POST', url: '/api/resources/note', headers, payload: { subjectSlug: 'physics', nodePath: ['move-source', 'move-child'], title: '随目录移动的笔记', content: '# retained body' } })
+    assert.equal(note.statusCode, 201)
+    const noteId = note.json().resource.id as string
+
+    const moved = await app.inject({ method: 'POST', url: `/api/admin/nodes/${sourceId}/move`, headers, payload: { subjectSlug: 'physics', parentPath: ['move-target'] } })
+    assert.equal(moved.statusCode, 200)
+    const catalog = await app.inject({ method: 'GET', url: '/api/catalog', headers })
+    const movedEntry = catalog.json().entries.find((entry: { id: string }) => entry.id === noteId)
+    assert.deepEqual(movedEntry.topicPath, ['move-target', 'move-source', 'move-child'])
+    assert.equal(catalog.json().subjects[0].nodes.find((node: { id: string }) => node.id === targetId).children.length, 2)
+
+    const cycle = await app.inject({ method: 'POST', url: `/api/admin/nodes/${sourceId}/move`, headers, payload: { subjectSlug: 'physics', parentPath: ['move-target', 'move-source', 'move-child'] } })
+    assert.equal(cycle.statusCode, 400)
+    assert.equal(cycle.json().error, 'MOVE_CYCLE')
+    const duplicate = await app.inject({ method: 'POST', url: `/api/admin/nodes/${sourceId}/move`, headers, payload: { subjectSlug: 'physics', parentPath: ['move-target'] } })
+    assert.equal(duplicate.statusCode, 400)
+    const duplicateId = await createNode('move-duplicate', '占用同级标识')
+    const conflict = await app.inject({ method: 'POST', url: `/api/admin/nodes/${duplicateId}/move`, headers, payload: { subjectSlug: 'physics', parentPath: ['move-target'] } })
+    assert.equal(conflict.statusCode, 409)
+    const resource = await app.inject({ method: 'GET', url: `/api/resources/${noteId}`, headers })
+    assert.equal(resource.statusCode, 200)
+    assert.equal(resource.json().resource.content, '# retained body')
+    assert.equal((await app.inject({ method: 'DELETE', url: `/api/resources/${noteId}`, headers })).statusCode, 200)
+    for (const id of [sourceId, duplicateId, targetId]) {
+      assert.equal((await app.inject({ method: 'DELETE', url: `/api/admin/nodes/${id}`, headers })).statusCode, 200)
+    }
   })
 
   await t.test('含笔记的父菜单不能直接删除，移动笔记后才可删除', async () => {
